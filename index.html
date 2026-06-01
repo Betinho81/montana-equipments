@@ -703,23 +703,21 @@ function pageCots(){
   </div>
 
   <div class="kpi-row kpi-4">
-    <div class="kpi-card" onclick="toggleFilter('fE','Stand By')" style="${S.fE==='Stand By'?'border:2px solid #e65100;':''}">
-      <div class="kpi-card" style="border-top-color:#e65100;pointer-events:none;padding:0;border:none;box-shadow:none;">
-        <div class="kpi-label">Stand By</div>
-        <div class="kpi-val" style="color:#e65100;">${byE('Stand By')}</div>
-        <div class="kpi-sub">esperando confirmación</div>
-      </div>
+    <div class="kpi-card" onclick="toggleFilter('fE','Stand By')" style="border-top-color:#e65100;${S.fE==='Stand By'?'outline:2px solid #e65100;outline-offset:-1px;':''}">
+      <div class="kpi-label">Stand By</div>
+      <div class="kpi-val" style="color:#e65100;">${byE('Stand By')}</div>
+      <div class="kpi-sub">esperando confirmación</div>
     </div>
-    <div class="kpi-card" onclick="toggleFilter('fE','En proceso')">
+    <div class="kpi-card" onclick="toggleFilter('fE','En proceso')" style="${S.fE==='En proceso'?'outline:2px solid var(--d);outline-offset:-1px;':''}">
       <div class="kpi-label">En proceso</div>
       <div class="kpi-val">${byE('En proceso')}</div>
       <div class="kpi-sub">importación activa</div>
     </div>
-    <div class="kpi-card" onclick="toggleFilter('fE','Completada')" style="border-top-color:#27ae60;">
+    <div class="kpi-card" onclick="toggleFilter('fE','Completada')" style="border-top-color:#27ae60;${S.fE==='Completada'?'outline:2px solid #27ae60;outline-offset:-1px;':''}">
       <div class="kpi-label">Completadas</div>
       <div class="kpi-val" style="color:#27ae60;">${byE('Completada')}</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" style="cursor:default;">
       <div class="kpi-label">Total OCs</div>
       <div class="kpi-val">${S.cots.length}</div>
     </div>
