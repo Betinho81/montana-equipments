@@ -1297,8 +1297,7 @@ function pageCIF(){
     </div>
   </div>
 
-  ${sel?`
-  <!-- BANNER FIRME / BLOQUEADO -->
+    <!-- BANNER FIRME / BLOQUEADO -->
   ${isLocked?`
   <div style="background:#e8f5e9;border:1.5px solid #2e7d32;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <div style="display:flex;align-items:center;gap:10px;">
@@ -1619,7 +1618,7 @@ function exportCIF(){
   </div>
 
   <div class="ftr"><span>Montana Equipments · Sistema de Gestión v1.0</span><span>Liquidación CIF · OC ${oc.oc} · ${new Date().toLocaleDateString('es-CO')}</span></div>
-  '<'+'script>setTimeout(()=>window.print(),500);<'+'/script></body></html>`);
+  \x3Cscript>setTimeout(()=>window.print(),500);\x3C/script></body></html>`);
   w.document.close();
   toast('PDF Liquidación CIF generado ✓');
 }
@@ -1712,7 +1711,7 @@ function exportPDF(id){
     <span>Montana Equipments · Sistema de Gestión v1.0</span>
     <span>OC ${c.oc} · Generado ${new Date().toLocaleDateString('es-CO')}</span>
   </div>
-  '<'+'script>setTimeout(()=>window.print(),500);<'+'/script>
+  \x3Cscript>setTimeout(()=>window.print(),500);\x3C/script>
   </body></html>`);
   w.document.close();
   toast('PDF OC '+c.oc+' generado ✓');
