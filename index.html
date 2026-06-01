@@ -564,6 +564,7 @@ const PRODS_INIT=[
 // STATE
 let S={
   user:null, page:'cots',
+  cifSel:null, cifConts:[], cifTRM:7.25, cifCOP:4100,
   cots:null, prods:null,
   ncL:[], ncC:'', ncN:'',
   fE:'', fA:'', fS:'', pS:'', pG:'',
@@ -665,6 +666,7 @@ function renderSidebar(){
   let html='';
   html+=`<span class="sb-section">Importación</span>`;
   html+=`<div class="sb-item ${S.page==='cots'?'active':''}" data-p="cots"><i class="ti ti-calculator"></i>Cotizaciones<span class="sb-badge">${S.cots.length}</span></div>`;
+  html+=`<div class="sb-item ${S.page==='cif'?'active':''}" data-p="cif"><i class="ti ti-coin"></i>Calculadora CIF</div>`;
   html+=`<div class="sb-div"></div><span class="sb-section">Catálogo</span>`;
   html+=`<div class="sb-item ${S.page==='prods'?'active':''}" data-p="prods"><i class="ti ti-package"></i>Productos<span class="sb-badge">${S.prods.length}</span></div>`;
   document.getElementById('sidebar').innerHTML=html;
@@ -678,6 +680,7 @@ function renderPage(){
   const ma=document.getElementById('main-area');
   if(S.page==='cots') ma.innerHTML=pageCots();
   else if(S.page==='prods') ma.innerHTML=pageProds();
+  else if(S.page==='cif') ma.innerHTML=pageCIF();
   bindPage();
 }
 
@@ -1218,6 +1221,353 @@ function addFoto(input){
 function delFoto(prodId,idx){
   const p=S.prods.find(x=>x.id===prodId);
   if(p?.fotos){p.fotos.splice(idx,1);saveData();openModal(modalProd(p));}
+}
+
+
+// ═══════════════════════════════════════════
+// MÓDULO CALCULADORA CIF
+// ═══════════════════════════════════════════
+function pageCIF(){
+  // Solo OCs aprobadas (En proceso) o completadas
+  const ocs_disp = S.cots.filter(c => c.estado === 'En proceso' || c.estado === 'Completada' || c.estado === 'Stand By');
+  const sel = S.cifSel ? S.cots.find(x=>x.id===S.cifSel) : null;
+
+  // Calcular contenedores únicos de la OC seleccionada
+  const conts = sel ? [...new Set((sel.detalle||[]).map(l=>l.cont).filter(Boolean))] : [];
+
+  return `
+  <div class="page-header">
+    <div>
+      <div class="page-title">Calculadora CIF</div>
+      <div class="page-sub">Liquidación completa FOB → CIF USD → CIF COP</div>
+    </div>
+  </div>
+
+  <!-- PASO 1: Seleccionar OC -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div class="card-title"><i class="ti ti-list-check"></i>Paso 1 · Seleccionar Orden de Compra</div>
+    </div>
+    <div style="padding:14px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="form-label">Orden de Compra *</label>
+          <select class="form-input" id="cif-oc" onchange="onCifOC()">
+            <option value="">— Seleccionar OC —</option>
+            ${ocs_disp.map(c=>`<option value="${c.id}" ${S.cifSel===c.id?'selected':''}>${c.oc} · ${c.fv||'S/F'} · FOB ${fR(c.totalFob)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="form-label">TRM RMB → USD</label>
+            <input class="form-input" id="cif-trm" type="number" step="0.01" value="${S.cifTRM}" oninput="S.cifTRM=+this.value;renderPage()">
+          </div>
+          <div>
+            <label class="form-label">TRM USD → COP</label>
+            <input class="form-input" id="cif-cop" type="number" step="1" value="${S.cifCOP}" oninput="S.cifCOP=+this.value;renderPage()">
+          </div>
+        </div>
+      </div>
+      ${sel?`
+      <div style="background:var(--dp);border-radius:9px;padding:10px 14px;display:flex;gap:16px;flex-wrap:wrap;">
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">OC</div><div style="font-size:16px;font-weight:600;color:var(--v);">${sel.oc}</div></div>
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">Fact. Venta</div><div style="font-size:16px;font-weight:600;color:var(--v);">${sel.fv||'—'}</div></div>
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">Año</div><div style="font-size:16px;font-weight:600;color:var(--v);">${sel.ano}</div></div>
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">Total FOB RMB</div><div style="font-size:16px;font-weight:600;color:var(--v);">${fR(sel.totalFob)}</div></div>
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">Líneas</div><div style="font-size:16px;font-weight:600;color:var(--v);">${sel.lineas}</div></div>
+        <div><div style="font-size:9px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:2px;">Estado</div><div style="margin-top:3px;">${B(sel.estado)}</div></div>
+      </div>`:''}
+    </div>
+  </div>
+
+  ${sel?`
+  <!-- PASO 2: Contenedores -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div class="card-title"><i class="ti ti-container"></i>Paso 2 · Contenedores y Costos de Flete</div>
+      <button class="btn btn-gold btn-sm" onclick="addCifCont()"><i class="ti ti-plus"></i>Agregar Contenedor</button>
+    </div>
+    <div style="padding:14px 16px;">
+      ${S.cifConts.length===0?`
+        <div style="text-align:center;padding:24px;background:var(--cr);border-radius:9px;border:2px dashed var(--bd);color:var(--tl);font-size:13px;">
+          <i class="ti ti-container" style="font-size:30px;display:block;margin-bottom:7px;color:var(--bd);"></i>
+          Agrega los contenedores de esta OC con sus costos de flete
+        </div>`:`
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th>Contenedor #</th>
+              <th style="text-align:right">Ocean Fee (RMB)</th>
+              <th style="text-align:right">Container (USD)</th>
+              <th style="text-align:right">Local Charge (RMB)</th>
+              <th style="text-align:right">Insurance (RMB)</th>
+              <th style="text-align:right">Truck Fee (RMB)</th>
+              <th style="text-align:right">Total Flete RMB</th>
+              <th></th>
+            </tr></thead>
+            <tbody>
+              ${S.cifConts.map((c,i)=>{
+                const contUsdRmb = (c.contUsd||0)*S.cifTRM;
+                const totalFlete = (c.ocean||0)+contUsdRmb+(c.local||0)+(c.insurance||0)+(c.truck||0);
+                return `<tr>
+                  <td><b style="color:var(--v);">Cont. ${c.num||i+1}</b></td>
+                  <td><input class="form-input" type="number" step="0.01" value="${c.ocean||0}" style="width:100px;padding:4px 8px;" oninput="S.cifConts[${i}].ocean=+this.value;renderPage()"></td>
+                  <td><input class="form-input" type="number" step="0.01" value="${c.contUsd||0}" style="width:100px;padding:4px 8px;" oninput="S.cifConts[${i}].contUsd=+this.value;renderPage()"></td>
+                  <td><input class="form-input" type="number" step="0.01" value="${c.local||0}" style="width:100px;padding:4px 8px;" oninput="S.cifConts[${i}].local=+this.value;renderPage()"></td>
+                  <td><input class="form-input" type="number" step="0.01" value="${c.insurance||0}" style="width:100px;padding:4px 8px;" oninput="S.cifConts[${i}].insurance=+this.value;renderPage()"></td>
+                  <td><input class="form-input" type="number" step="0.01" value="${c.truck||0}" style="width:100px;padding:4px 8px;" oninput="S.cifConts[${i}].truck=+this.value;renderPage()"></td>
+                  <td style="text-align:right;font-weight:600;color:var(--v);">${fR(totalFlete)}</td>
+                  <td><button class="btn btn-danger btn-sm" onclick="S.cifConts.splice(${i},1);renderPage()"><i class="ti ti-trash"></i></button></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`}
+    </div>
+  </div>
+
+  <!-- PASO 3: Liquidación -->
+  ${S.cifConts.length>0?`
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><i class="ti ti-math-function"></i>Paso 3 · Liquidación CIF Completa</div>
+      <button class="btn btn-pdf btn-sm" onclick="exportCIF()"><i class="ti ti-file-type-pdf"></i>Exportar PDF</button>
+    </div>
+    <div style="padding:14px 16px;">
+      ${calcCIF(sel)}
+    </div>
+  </div>`:''}
+  `:''}`;
+}
+
+function calcCIF(oc){
+  const fob = oc.totalFob;
+  const qty_total = (oc.detalle||[]).reduce((s,l)=>s+(l.qty||0),0) || oc.lineas;
+  const commission = fob * 0.065; // Aily 6.5%
+  const commission2 = fob * 0.065; // Rafa 6.5%
+  const totalComm = commission + commission2; // 13%
+
+  // Sumar todos los fletes de los contenedores
+  let totalOcean=0, totalContUsd=0, totalLocal=0, totalInsurance=0, totalTruck=0;
+  S.cifConts.forEach(c=>{
+    totalOcean += c.ocean||0;
+    totalContUsd += (c.contUsd||0)*S.cifTRM;
+    totalLocal += c.local||0;
+    totalInsurance += c.insurance||0;
+    totalTruck += c.truck||0;
+  });
+  const totalFlete = totalOcean + totalContUsd + totalLocal + totalInsurance + totalTruck;
+
+  const totalSinJAH = fob + totalComm + totalFlete;
+  const jah = fob * 0.07;
+  const totalCIF_RMB = totalSinJAH + jah;
+  const pctIncr = fob > 0 ? ((totalCIF_RMB - fob) / fob * 100) : 0;
+  const cifUnUSD = qty_total > 0 ? (totalCIF_RMB / S.cifTRM / qty_total) : 0;
+  const totalCIF_USD = totalCIF_RMB / S.cifTRM;
+  const cifUnCOP = cifUnUSD * S.cifCOP;
+
+  const row = (lbl, val, highlight=false, sub='') => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(26,58,46,.06);">
+      <div>
+        <div style="font-size:12.5px;color:${highlight?'var(--v)':'var(--tm)'};font-weight:${highlight?'600':'400'};">${lbl}</div>
+        ${sub?`<div style="font-size:10px;color:var(--tl);">${sub}</div>`:''}
+      </div>
+      <div style="font-size:${highlight?'15px':'13px'};font-weight:${highlight?'700':'500'};color:${highlight?'var(--v)':'var(--tm)'};">${val}</div>
+    </div>`;
+
+  const rowTotal = (lbl, val, color='var(--d)') => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--v);border-radius:8px;margin:6px 0;">
+      <div style="color:rgba(232,220,200,.7);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">${lbl}</div>
+      <div style="color:${color};font-size:18px;font-weight:700;">${val}</div>
+    </div>`;
+
+  return `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <!-- Columna 1: Desglose -->
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--v);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--d);">Desglose de Costos RMB</div>
+      ${row('FOB Total', fR(fob), true, `${qty_total.toLocaleString()} unidades`)}
+      ${row('Comisión Aily 6.5%', fR(commission), false, `${fR(fob)} × 6.5%`)}
+      ${row('Comisión Rafa 6.5%', fR(commission2), false, `${fR(fob)} × 6.5%`)}
+      ${row('Ocean Fee', fR(totalOcean), false, `${S.cifConts.length} contenedor(es)`)}
+      ${row('Container USD → RMB', fR(totalContUsd), false, `× TRM ¥${S.cifTRM}`)}
+      ${row('Local Charge (incl. truck)', fR(totalLocal))}
+      ${row('Insurance Fee', fR(totalInsurance))}
+      ${row('Truck Fee', fR(totalTruck))}
+      <div style="border-top:2px solid var(--d);margin:6px 0;"></div>
+      ${row('Total Flete', fR(totalFlete), true)}
+      ${row('Total SIN JAH', fR(totalSinJAH), true, 'FOB + Comisiones + Flete')}
+      ${row('JAH 7% (sobre FOB)', fR(jah), false, `${fR(fob)} × 7%`)}
+    </div>
+
+    <!-- Columna 2: Resultados -->
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--v);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--d);">Resultados Finales</div>
+      ${rowTotal('TOTAL CIF RMB', fR(totalCIF_RMB))}
+      <div style="padding:8px 0;">
+        ${row('% Incremento FOB vs CIF', pctIncr.toFixed(2)+'%', true, 'Referencia de margen')}
+        ${row('TRM utilizado', '¥'+S.cifTRM+' / USD')}
+      </div>
+      ${rowTotal('TOTAL CIF USD', fU(totalCIF_USD), '#e8c84a')}
+      <div style="padding:8px 0;">
+        ${row('Precio CIF/UN USD', fU(cifUnUSD), true, `${fR(totalCIF_RMB)} ÷ ¥${S.cifTRM} ÷ ${qty_total.toLocaleString()} uds`)}
+        ${row('TRM COP', '$'+fN(S.cifCOP,0))}
+      </div>
+      ${rowTotal('PRECIO CIF/UN COP', '$'+fN(cifUnCOP,0), '#e8dcc8')}
+
+      <div style="background:var(--dp);border-radius:9px;padding:12px;margin-top:10px;">
+        <div style="font-size:10px;font-weight:600;color:var(--vm);text-transform:uppercase;margin-bottom:8px;">Resumen Ejecutivo</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="text-align:center;background:var(--white);border-radius:7px;padding:10px;">
+            <div style="font-size:9px;color:var(--tl);text-transform:uppercase;margin-bottom:3px;">CIF Total USD</div>
+            <div style="font-size:16px;font-weight:700;color:var(--v);">${fU(totalCIF_USD)}</div>
+          </div>
+          <div style="text-align:center;background:var(--white);border-radius:7px;padding:10px;">
+            <div style="font-size:9px;color:var(--tl);text-transform:uppercase;margin-bottom:3px;">Precio/UN USD</div>
+            <div style="font-size:16px;font-weight:700;color:var(--v);">${fU(cifUnUSD)}</div>
+          </div>
+          <div style="text-align:center;background:var(--white);border-radius:7px;padding:10px;">
+            <div style="font-size:9px;color:var(--tl);text-transform:uppercase;margin-bottom:3px;">Precio/UN COP</div>
+            <div style="font-size:16px;font-weight:700;color:var(--v);">$${fN(cifUnCOP,0)}</div>
+          </div>
+          <div style="text-align:center;background:var(--white);border-radius:7px;padding:10px;">
+            <div style="font-size:9px;color:var(--tl);text-transform:uppercase;margin-bottom:3px;">% Incremento</div>
+            <div style="font-size:16px;font-weight:700;color:${pctIncr>30?'#c0392b':'#2e7d32'};">${pctIncr.toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function onCifOC(){
+  const v = document.getElementById('cif-oc')?.value;
+  S.cifSel = v ? +v : null;
+  S.cifConts = [];
+  renderPage();
+}
+
+function addCifCont(){
+  const num = S.cifConts.length + 1;
+  S.cifConts.push({num, ocean:0, contUsd:0, local:0, insurance:0, truck:0});
+  renderPage();
+}
+
+function exportCIF(){
+  const oc = S.cots.find(x=>x.id===S.cifSel);
+  if(!oc){toast('Selecciona una OC primero','warn');return;}
+  const fob = oc.totalFob;
+  const qty_total = (oc.detalle||[]).reduce((s,l)=>s+(l.qty||0),0) || oc.lineas;
+  const commission = fob * 0.065;
+  const commission2 = fob * 0.065;
+  let totalOcean=0,totalContUsd=0,totalLocal=0,totalInsurance=0,totalTruck=0;
+  S.cifConts.forEach(c=>{
+    totalOcean+=c.ocean||0;
+    totalContUsd+=(c.contUsd||0)*S.cifTRM;
+    totalLocal+=c.local||0;
+    totalInsurance+=c.insurance||0;
+    totalTruck+=c.truck||0;
+  });
+  const totalFlete=totalOcean+totalContUsd+totalLocal+totalInsurance+totalTruck;
+  const totalSinJAH=fob+commission+commission2+totalFlete;
+  const jah=fob*0.07;
+  const totalCIF_RMB=totalSinJAH+jah;
+  const pctIncr=fob>0?((totalCIF_RMB-fob)/fob*100):0;
+  const cifUnUSD=qty_total>0?(totalCIF_RMB/S.cifTRM/qty_total):0;
+  const totalCIF_USD=totalCIF_RMB/S.cifTRM;
+  const cifUnCOP=cifUnUSD*S.cifCOP;
+
+  const w=window.open('','_blank');
+  if(!w){toast('Habilita pop-ups','warn');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liquidación CIF · ${oc.oc}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}body{font-family:system-ui,sans-serif;font-size:12px;color:#1a1a1a;}
+    .hdr{background:#1a3a2e;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;}
+    .brand{color:#e8dcc8;font-size:16px;font-weight:600;}.sub{color:#c9a227;font-size:9px;letter-spacing:2px;text-transform:uppercase;}
+    .badge{background:#c9a227;color:#1a3a2e;padding:5px 14px;border-radius:16px;font-size:13px;font-weight:600;}
+    .strip{background:#f5e9c0;border:1px solid #2d5c47;border-radius:9px;display:flex;margin:14px 24px 0;}
+    .sc{flex:1;padding:9px 14px;border-right:1px solid rgba(45,92,71,.2);}.sc:last-child{border-right:none;}
+    .sl{font-size:9px;font-weight:600;color:#2d5c47;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+    .sv{font-size:15px;font-weight:600;color:#1a3a2e;}
+    .sec{margin:14px 24px;}.sec-t{font-size:10px;font-weight:600;color:#c9a227;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #f5e9c0;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+    .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid rgba(26,58,46,.07);font-size:11.5px;}
+    .row b{font-weight:600;color:#1a3a2e;}
+    .total-row{background:#1a3a2e;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;margin:6px 0;}
+    .tl{color:rgba(232,220,200,.6);font-size:10px;text-transform:uppercase;}
+    .tv{color:#c9a227;font-size:17px;font-weight:700;}
+    table{width:100%;border-collapse:collapse;}
+    th{background:#1a3a2e;color:#c9a227;font-size:9px;padding:7px 10px;text-align:left;letter-spacing:.5px;text-transform:uppercase;}
+    td{padding:6px 10px;border-bottom:0.5px solid rgba(26,58,46,.07);font-size:11px;}
+    tr:nth-child(even)td{background:#faf7f0;}
+    .resumen{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;}
+    .res-card{background:#f5e9c0;border-radius:8px;padding:10px;text-align:center;}
+    .res-l{font-size:9px;color:#2d5c47;text-transform:uppercase;font-weight:600;margin-bottom:3px;}
+    .res-v{font-size:15px;font-weight:700;color:#1a3a2e;}
+    .ftr{margin:16px 24px;padding-top:9px;border-top:0.5px solid #e8dcc8;display:flex;justify-content:space-between;font-size:10px;color:#7a7a7a;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  </style></head><body>
+  <div class="hdr"><div><div class="brand">Montana Equipments</div><div class="sub">Liquidación CIF · GZ PIANT OPTICS CO.,LTD</div></div>
+    <div class="badge">OC ${oc.oc}</div></div>
+  <div class="strip">
+    <div class="sc"><div class="sl">OC #</div><div class="sv">${oc.oc}</div></div>
+    <div class="sc"><div class="sl">Fact. Venta</div><div class="sv">${oc.fv||'—'}</div></div>
+    <div class="sc"><div class="sl">Año</div><div class="sv">${oc.ano}</div></div>
+    <div class="sc"><div class="sl">Fecha</div><div class="sv" style="font-size:13px;">${oc.fecha||'—'}</div></div>
+    <div class="sc"><div class="sl">TRM RMB</div><div class="sv" style="font-size:13px;">¥${S.cifTRM}</div></div>
+    <div class="sc"><div class="sl">TRM COP</div><div class="sv" style="font-size:13px;">$${fN(S.cifCOP,0)}</div></div>
+  </div>
+
+  <div class="sec" style="margin-top:14px;">
+    <div class="sec-t">Contenedores y Costos de Flete</div>
+    <table><thead><tr>
+      <th>Cont.</th><th>Ocean Fee (RMB)</th><th>Container USD</th><th>Local Charge (RMB)</th><th>Insurance (RMB)</th><th>Truck Fee (RMB)</th><th>Total Flete RMB</th>
+    </tr></thead><tbody>
+      ${S.cifConts.map((c,i)=>{
+        const f=(c.ocean||0)+((c.contUsd||0)*S.cifTRM)+(c.local||0)+(c.insurance||0)+(c.truck||0);
+        return `<tr><td><b>Cont. ${c.num||i+1}</b></td><td>¥${fN(c.ocean||0,0)}</td><td>$${fN(c.contUsd||0,2)}</td><td>¥${fN(c.local||0,0)}</td><td>¥${fN(c.insurance||0,2)}</td><td>¥${fN(c.truck||0,0)}</td><td><b>¥${fN(f,0)}</b></td></tr>`;
+      }).join('')}
+    </tbody></table>
+  </div>
+
+  <div class="sec"><div class="grid2">
+    <div>
+      <div class="sec-t">Desglose CIF (RMB)</div>
+      <div class="row"><span>FOB Total</span><b>¥${fN(fob,0)}</b></div>
+      <div class="row"><span>Comisión Aily 6.5%</span><span>¥${fN(commission,0)}</span></div>
+      <div class="row"><span>Comisión Rafa 6.5%</span><span>¥${fN(commission2,0)}</span></div>
+      <div class="row"><span>Total Flete</span><span>¥${fN(totalFlete,0)}</span></div>
+      <div class="row"><span><b>Total SIN JAH</b></span><b>¥${fN(totalSinJAH,0)}</b></div>
+      <div class="row"><span>JAH 7% (sobre FOB)</span><span>¥${fN(jah,0)}</span></div>
+      <div class="total-row"><div class="tl">TOTAL CIF RMB</div><div class="tv">¥${fN(totalCIF_RMB,0)}</div></div>
+    </div>
+    <div>
+      <div class="sec-t">Resultados USD / COP</div>
+      <div class="row"><span>Total CIF RMB</span><b>¥${fN(totalCIF_RMB,0)}</b></div>
+      <div class="row"><span>÷ TRM RMB (¥${S.cifTRM})</span><span>=</span></div>
+      <div class="total-row"><div class="tl">TOTAL CIF USD</div><div class="tv">$${fN(totalCIF_USD,2)}</div></div>
+      <div class="row" style="margin-top:8px;"><span>÷ Cantidad total (${qty_total.toLocaleString()} uds)</span><span>=</span></div>
+      <div class="row"><span><b>Precio CIF/UN USD</b></span><b>$${fN(cifUnUSD,4)}</b></div>
+      <div class="row"><span>× TRM COP ($${fN(S.cifCOP,0)})</span><span>=</span></div>
+      <div class="total-row"><div class="tl">PRECIO CIF/UN COP</div><div class="tv" style="color:#e8dcc8;">$${fN(cifUnCOP,0)}</div></div>
+      <div class="row" style="margin-top:8px;"><span>% Incremento FOB vs CIF</span><b style="color:${pctIncr>30?'#c0392b':'#2e7d32'}">${pctIncr.toFixed(2)}%</b></div>
+    </div>
+  </div></div>
+
+  <div class="sec">
+    <div class="sec-t">Resumen Ejecutivo</div>
+    <div class="resumen">
+      <div class="res-card"><div class="res-l">FOB Total RMB</div><div class="res-v">¥${fN(fob,0)}</div></div>
+      <div class="res-card"><div class="res-l">CIF Total USD</div><div class="res-v">$${fN(totalCIF_USD,2)}</div></div>
+      <div class="res-card"><div class="res-l">Precio/UN USD</div><div class="res-v">$${fN(cifUnUSD,4)}</div></div>
+      <div class="res-card"><div class="res-l">Precio/UN COP</div><div class="res-v">$${fN(cifUnCOP,0)}</div></div>
+    </div>
+  </div>
+
+  <div class="ftr"><span>Montana Equipments · Sistema de Gestión v1.0</span><span>Liquidación CIF · OC ${oc.oc} · ${new Date().toLocaleDateString('es-CO')}</span></div>
+  <script>setTimeout(()=>window.print(),500);<\/script></body></html>`);
+  w.document.close();
+  toast('PDF Liquidación CIF generado ✓');
 }
 
 // ─── PDF EXPORT ───
