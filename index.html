@@ -706,7 +706,7 @@ function pageCots(){
       <div class="page-sub">Próxima OC: <b style="color:var(--v);">${nextOC()}</b> · ${todayDisp()} · ${fil.length} de ${S.cots.length} OCs</div>
     </div>
     <div class="page-actions">
-      ${isAdmin()?'<button class="btn btn-gold" id="btn-new-cot"><i class="ti ti-plus"></i>Nueva Cotización</button>':'<span style="font-size:11px;background:#f0ede6;color:#5a5a5a;padding:4px 10px;border-radius:20px;"><i class="ti ti-eye" style="margin-right:4px;"></i>Solo lectura</span>'}
+      ${isAdmin()?`<button class="btn btn-gold" id="btn-new-cot"><i class="ti ti-plus"></i>Nueva Cotización</button>`:`<span style="font-size:11px;background:#f0ede6;color:#5a5a5a;padding:4px 10px;border-radius:20px;"><i class="ti ti-eye" style="margin-right:4px;"></i>Solo lectura</span>`}
     </div>
   </div>
 
@@ -801,7 +801,7 @@ function pageProds(){
       <div class="page-title">Catálogo de Productos</div>
       <div class="page-sub">${fil.length} de ${S.prods.length} productos</div>
     </div>
-    ${isAdmin()?'<button class="btn btn-gold btn-sm" id="btn-new-prod"><i class="ti ti-plus"></i>Nuevo Producto</button>':'<span style="font-size:11px;background:#f0ede6;color:#5a5a5a;padding:4px 10px;border-radius:20px;"><i class="ti ti-eye" style="margin-right:4px;"></i>Solo lectura</span>'}
+    ${isAdmin()?`<button class="btn btn-gold btn-sm" id="btn-new-prod"><i class="ti ti-plus"></i>Nuevo Producto</button>`:`<span style="font-size:11px;background:#f0ede6;color:#5a5a5a;padding:4px 10px;border-radius:20px;"><i class="ti ti-eye" style="margin-right:4px;"></i>Solo lectura</span>`}
   </div>
   <div class="filter-bar">
     <input class="filter-input" id="p-search" placeholder="SKU, nombre..." value="${S.pS}" style="width:170px;">
