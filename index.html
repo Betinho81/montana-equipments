@@ -1715,6 +1715,8 @@ function bindBL(){
 }
 
 function openModalBL(blData){
+  var d = blData || {};
+  var currentId = d.id||null;
   var ocs_ok = S.cots.filter(function(c){
     if(c.estado!=='En proceso'&&c.estado!=='Completada') return false;
     var ocLines = (c.detalle||[]).filter(function(l){return l.p||l.producto;});
@@ -1722,20 +1724,18 @@ function openModalBL(blData){
     var assignedCount = 0;
     ocLines.forEach(function(l,i){
       var isFullyAssigned = S.bls.some(function(b){
-        return b.ocId===c.id && b.id!==state.id && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
+        return b.ocId===c.id && b.id!==currentId && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
       });
       if(isFullyAssigned) assignedCount++;
     });
     return assignedCount < ocLines.length;
   });
-  var d = blData || {};
-  // _blState holds working state for the modal
   window._blState = {
     ocId: d.ocId||null,
-    lines: d.lines ? JSON.parse(JSON.stringify(d.lines)) : [], // [{lineIdx, sku, producto, qtyOrig, qtySel, cont}]
+    lines: d.lines ? JSON.parse(JSON.stringify(d.lines)) : [],
     conts: d.conts ? JSON.parse(JSON.stringify(d.conts)) : [],
     etapa: d.etapa||'Booking Confirmed',
-    id: d.id||null,
+    id: currentId,
   };
   renderModalBL(d, ocs_ok);
 }
@@ -1765,7 +1765,7 @@ function renderModalBL(d, ocs_ok){
     h += '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">';
     h += '<span style="font-size:11px;color:var(--vm);"><b>'+ocLines.length+'</b> lines · FOB: <b>'+fR(selOC.totalFob)+'</b></span>';
     // Show how many lines already assigned to other BLs
-    var assignedBLs = S.bls.filter(function(b){return b.ocId===selOC.id && b.id!==state.id;});
+    var assignedBLs = S.bls.filter(function(b){return b.ocId===selOC.id && b.id!==(window._blState&&window._blState.id);});
     if(assignedBLs.length>0){
       h += '<span style="font-size:11px;color:#e65100;"><i class="ti ti-info-circle"></i> '+assignedBLs.length+' existing BL(s) for this PO</span>';
     }
@@ -1781,7 +1781,7 @@ function renderModalBL(d, ocs_ok){
     // Build map of already-assigned lines from OTHER BLs of this OC
     var assignedLineMap = {}; // {lineIdx: blNum}
     S.bls.forEach(function(b){
-      if(b.ocId===state.ocId && b.id!==state.id){
+      if(b.ocId===state.ocId && b.id!==(window._blState&&window._blState.id)){
         (b.lines||[]).forEach(function(bl){
           if(!bl.isSplit){
             // Fully assigned - block completely
@@ -1964,7 +1964,7 @@ function onBLOCChange(){
     var assignedCount = 0;
     ocLines.forEach(function(l,i){
       var isFullyAssigned = S.bls.some(function(b){
-        return b.ocId===c.id && b.id!==state.id && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
+        return b.ocId===c.id && b.id!==(window._blState&&window._blState.id) && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
       });
       if(isFullyAssigned) assignedCount++;
     });
@@ -2012,7 +2012,7 @@ function toggleBLLine(lineIdx){
     var assignedCount=0;
     ocLines2.forEach(function(l2,i){
       var isFullyAssigned = S.bls.some(function(b){
-        return b.ocId===c.id && b.id!==state.id && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
+        return b.ocId===c.id && b.id!==(window._blState&&window._blState.id) && (b.lines||[]).some(function(bl){return bl.lineIdx===i && !bl.isSplit;});
       });
       if(isFullyAssigned) assignedCount++;
     });
@@ -2057,7 +2057,7 @@ function splitBLLine(lineIdx, maxQty){
     if(ocL.length===0) return true;
     var ac=0;
     ocL.forEach(function(l2,i){
-      if(S.bls.some(function(b){return b.ocId===c.id&&b.id!==state.id&&(b.lines||[]).some(function(bl){return bl.lineIdx===i&&!bl.isSplit;});})) ac++;
+      if(S.bls.some(function(b){return b.ocId===c.id&&b.id!==(window._blState&&window._blState.id)&&(b.lines||[]).some(function(bl){return bl.lineIdx===i&&!bl.isSplit;});})) ac++;
     });
     return ac<ocL.length;
   });
