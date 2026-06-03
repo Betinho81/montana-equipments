@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Test Vercel</title></head>
+<body style="font-family:system-ui;padding:20px;">
+<h2>Test de Botones</h2>
+<div id="log" style="background:#f0f0f0;padding:10px;margin:10px 0;min-height:50px;"></div>
+
+<!-- Test 1: botón estático con onclick directo -->
+<button onclick="log('Test 1 OK - onclick estatico')" style="margin:5px;padding:10px;background:#4CAF50;color:white;border:none;cursor:pointer;">
+  Test 1: onclick estático
+</button>
+
+<!-- Test 2: botón via innerHTML con onclick -->
+<div id="container2"></div>
+
+<!-- Test 3: botón via innerHTML con data-action -->
+<div id="container3"></div>
+
+<!-- Test 4: botón via addEventListener -->
+<button id="btn4" style="margin:5px;padding:10px;background:#2196F3;color:white;border:none;cursor:pointer;">
+  Test 4: addEventListener
+</button>
+
+<script>
+function log(msg){
+  var d=document.getElementById('log');
+  d.innerHTML += '<div style="color:green;margin:3px;">✅ '+msg+'</div>';
+}
+
+// Test 2: innerHTML con onclick
+document.getElementById('container2').innerHTML = 
+  '<button onclick="log(\'Test 2 OK - onclick en innerHTML\')" style="margin:5px;padding:10px;background:#FF9800;color:white;border:none;cursor:pointer;">Test 2: onclick en innerHTML</button>';
+
+// Test 3: innerHTML con data-action
+document.getElementById('container3').innerHTML = 
+  '<button data-action="test3" style="margin:5px;padding:10px;background:#9C27B0;color:white;border:none;cursor:pointer;">Test 3: data-action delegation</button>';
+
+// Delegation handler
+document.addEventListener('click', function(e){
+  var el = e.target.closest('[data-action]');
+  if(el && el.dataset.action === 'test3'){
+    log('Test 3 OK - data-action delegation');
+  }
+});
+
+// Test 4: addEventListener
+document.getElementById('btn4').addEventListener('click', function(){
+  log('Test 4 OK - addEventListener');
+});
+
+log('Página cargada - click los botones');
+</script>
+</body>
+</html>
