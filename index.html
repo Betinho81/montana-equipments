@@ -1546,91 +1546,122 @@ function calcCIF(oc){
   h += '</div>';
 
   // ── Costeo por Línea de Producto ──
-  var detalle = (oc.detalle||[]).filter(function(l){ return (l.p||l.producto) && (l.qty>0||l.fob>0); });
+  var detalle = (oc.detalle||[]).filter(function(l){ return (l.p||l.producto) && (l.qty>0||(l.fob||0)>0||(l.rmb||0)>0); });
   if(detalle.length > 0){
-    var fobTotal = detalle.reduce(function(s,l){ return s+(l.fob||l.qty*l.rmb||0); }, 0);
+    var fobTotal = detalle.reduce(function(s,l){ return s+(l.fob||(l.qty*(l.rmb||0))||0); }, 0);
+
+    h += '<div style="margin-top:24px;background:#fff;border-radius:14px;border:1px solid var(--bo);overflow:hidden;box-shadow:0 2px 8px rgba(26,58,46,.06);">';
     
-    h += '<div style="margin-top:20px;background:#fff;border-radius:12px;border:1px solid var(--bo);overflow:hidden;">';
-    h += '<div style="background:var(--v);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;">';
-    h += '<div style="color:var(--be);font-size:13px;font-weight:600;letter-spacing:.5px;">COSTEO CIF POR LÍNEA DE PRODUCTO</div>';
-    h += '<div style="color:var(--d);font-size:11px;">Prorrateo por participación FOB · '+detalle.length+' líneas</div>';
+    // Header
+    h += '<div style="background:var(--v);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;">';
+    h += '<i class="ti ti-table-column" style="color:var(--d);font-size:18px;"></i>';
+    h += '<div><div style="color:var(--be);font-size:13px;font-weight:700;letter-spacing:.5px;">COSTEO CIF POR LÍNEA DE PRODUCTO</div>';
+    h += '<div style="color:rgba(201,162,39,.7);font-size:10px;margin-top:1px;">Prorrateo proporcional por participación FOB · '+detalle.length+' línea(s)</div></div>';
+    h += '</div>';
+    h += '<div style="background:rgba(201,162,39,.15);border-radius:20px;padding:4px 12px;color:var(--d);font-size:11px;font-weight:600;">OC '+oc.oc+'</div>';
     h += '</div>';
     
-    // Table header
-    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-    h += '<thead><tr style="background:#f5f0e8;">';
-    var cols = ['Producto','QTY','Unidad','FOB/UN ¥','FOB Total ¥','% Part.','Flete asig. ¥','CIF Total ¥','CIF/UN USD','CIF Total USD','Precio/UN COP','% Incr.'];
-    cols.forEach(function(c){
-      h += '<th style="padding:9px 12px;text-align:right;font-size:10px;font-weight:600;color:var(--v);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:2px solid var(--d);">'+c+'</th>';
+    // Column headers
+    h += '<div style="overflow-x:auto;">';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">';
+    h += '<thead>';
+    h += '<tr style="background:#1e4535;">';
+    var headers = [
+      {label:'Producto / SKU', align:'left', width:'220px'},
+      {label:'QTY', align:'right'},
+      {label:'UN', align:'center'},
+      {label:'FOB/UN ¥', align:'right'},
+      {label:'FOB Total ¥', align:'right'},
+      {label:'% Part.', align:'right'},
+      {label:'Flete asig. ¥', align:'right'},
+      {label:'CIF Total ¥', align:'right'},
+      {label:'CIF/UN USD', align:'right'},
+      {label:'CIF Total USD', align:'right'},
+      {label:'Precio/UN COP', align:'right'},
+      {label:'% Incr.', align:'right'},
+    ];
+    headers.forEach(function(hdr){
+      h += '<th style="padding:9px 12px;text-align:'+hdr.align+';font-size:9.5px;font-weight:600;color:#c9a227;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:2px solid rgba(201,162,39,.3);'+(hdr.width?'min-width:'+hdr.width+';':'')+'">'+hdr.label+'</th>';
     });
     h += '</tr></thead><tbody>';
-    
-    detalle.forEach(function(l, idx){
-      var fobLn = l.fob || (l.qty*(l.rmb||0));
-      var qty = l.qty || 0;
-      var rmb = l.rmb || 0;
+
+    detalle.forEach(function(l, i){
+      var fobLn = l.fob || (l.qty*(l.rmb||0)) || 0;
+      var qty = +(l.qty||0);
+      var rmb = +(l.rmb||0);
       var pct = fobTotal > 0 ? fobLn/fobTotal : 0;
-      
-      // Prorate all costs
-      var comAily = fob * 0.065 * pct;
-      var comRafa = fob * 0.065 * pct;
-      var fleteLn = totalFlete * pct;
-      var jahLn = fob * 0.07 * pct;
-      var cifLn = fobLn + comAily + comRafa + fleteLn + jahLn;
-      var cifUnUSD = qty > 0 ? cifLn / S.cifTRM / qty : 0;
-      var cifTotUSD = cifLn / S.cifTRM;
-      var cifUnCOP = cifUnUSD * S.cifCOP;
-      var pctIncLn = fobLn > 0 ? (cifLn - fobLn)/fobLn*100 : 0;
-      
-      var bg = idx%2===0 ? '#fff' : '#faf7f2';
-      h += '<tr style="background:'+bg+';border-bottom:0.5px solid #f0ede6;">';
-      
+
+      // Prorate all costs by FOB participation
+      var comAilyLn  = fob * 0.065 * pct;
+      var comRafaLn  = fob * 0.065 * pct;
+      var fleteLn    = totalFlete * pct;
+      var jahLn      = fob * 0.07 * pct;
+      var cifLn      = fobLn + comAilyLn + comRafaLn + fleteLn + jahLn;
+      var cifUnUSD   = (qty > 0 && S.cifTRM > 0) ? cifLn / S.cifTRM / qty : 0;
+      var cifTotUSD  = S.cifTRM > 0 ? cifLn / S.cifTRM : 0;
+      var cifUnCOP   = cifUnUSD * S.cifCOP;
+      var pctIncLn   = fobLn > 0 ? (cifLn - fobLn)/fobLn*100 : 0;
+
+      var bg = i%2===0 ? '#fff' : '#faf8f4';
+      h += '<tr style="background:'+bg+';border-bottom:1px solid #f0ede6;transition:background .15s;" onmouseover="this.style.background=\'#f0f7f3\'" onmouseout="this.style.background=\''+bg+'\'">';
+
       // Producto
-      h += '<td style="padding:10px 12px;text-align:left;max-width:200px;">';
-      h += '<div style="font-weight:600;color:var(--v);font-size:11px;">'+(l.p||l.producto)+'</div>';
-      if(l.sku||l.s) h += '<div style="font-size:9px;color:var(--tl);margin-top:2px;">'+(l.sku||l.s)+'</div>';
+      h += '<td style="padding:11px 12px;text-align:left;">';
+      h += '<div style="font-weight:600;color:var(--v);font-size:11.5px;line-height:1.3;">'+(l.p||l.producto||'')+'</div>';
+      if(l.sku||l.s) h += '<div style="font-size:9px;color:var(--tl);margin-top:2px;background:#f0ede6;display:inline-block;padding:1px 6px;border-radius:8px;">'+(l.sku||l.s)+'</div>';
       h += '</td>';
-      
-      // Numbers
-      var nums = [
-        {v: fN(qty,0), color:''},
-        {v: l.u||'PCS', color:''},
-        {v: fN(rmb,2), color:''},
-        {v: fN(fobLn,0), color:'#1a3a2e', bold:true},
-        {v: (pct*100).toFixed(1)+'%', color:'#666'},
-        {v: fN(fleteLn,0), color:''},
-        {v: fN(cifLn,0), color:'var(--v)', bold:true},
-        {v: '$'+fN(cifUnUSD,2), color:'#1565c0', bold:true},
-        {v: '$'+fN(cifTotUSD,0), color:'#1565c0'},
-        {v: '$'+fN(cifUnCOP,0), color:'#2e7d32', bold:true},
-        {v: pctIncLn.toFixed(1)+'%', color: pctIncLn>30?'#c0392b':'#2e7d32', bold:true},
-      ];
-      nums.forEach(function(n){
-        h += '<td style="padding:10px 12px;text-align:right;white-space:nowrap;'+(n.bold?'font-weight:700;':'')+'color:'+(n.color||'#333')+';">'+n.v+'</td>';
-      });
+
+      // QTY
+      h += '<td style="padding:11px 12px;text-align:right;font-weight:600;color:#333;">'+fN(qty,0)+'</td>';
+      // UN
+      h += '<td style="padding:11px 12px;text-align:center;color:var(--tl);font-size:10px;">'+(l.u||l.un||'PCS')+'</td>';
+      // FOB/UN
+      h += '<td style="padding:11px 12px;text-align:right;color:#555;">¥'+fN(rmb,2)+'</td>';
+      // FOB Total
+      h += '<td style="padding:11px 12px;text-align:right;font-weight:700;color:var(--v);">¥'+fN(fobLn,0)+'</td>';
+      // % Participación
+      h += '<td style="padding:11px 12px;text-align:right;"><span style="background:#f0f7f3;color:#1a5c3a;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;">'+(pct*100).toFixed(1)+'%</span></td>';
+      // Flete asignado
+      h += '<td style="padding:11px 12px;text-align:right;color:#666;">¥'+fN(fleteLn,0)+'</td>';
+      // CIF Total RMB
+      h += '<td style="padding:11px 12px;text-align:right;font-weight:700;color:var(--v);">¥'+fN(cifLn,0)+'</td>';
+      // CIF/UN USD
+      h += '<td style="padding:11px 12px;text-align:right;font-weight:700;color:#1565c0;font-size:12px;">$'+fN(cifUnUSD,2)+'</td>';
+      // CIF Total USD
+      h += '<td style="padding:11px 12px;text-align:right;color:#1976d2;">$'+fN(cifTotUSD,0)+'</td>';
+      // Precio/UN COP
+      h += '<td style="padding:11px 12px;text-align:right;font-weight:700;color:#2e7d32;font-size:12px;">$'+fN(cifUnCOP,0)+'</td>';
+      // % Incremento
+      var incColor = pctIncLn > 35 ? '#c0392b' : pctIncLn > 25 ? '#e67e22' : '#2e7d32';
+      h += '<td style="padding:11px 12px;text-align:right;"><span style="font-weight:700;color:'+incColor+';">'+pctIncLn.toFixed(1)+'%</span></td>';
       h += '</tr>';
     });
-    
+
     // Totals row
-    h += '<tr style="background:#1a3a2e;">';
-    h += '<td style="padding:11px 12px;text-align:left;color:#e8dcc8;font-weight:600;font-size:11px;" colspan="3">TOTAL OC</td>';
-    h += '<td style="padding:11px 12px;text-align:right;color:#c9a227;font-weight:700;">'+fN(fobTotal,0)+'</td>';
-    h += '<td style="padding:11px 12px;text-align:right;color:#e8dcc8;">100%</td>';
-    h += '<td style="padding:11px 12px;text-align:right;color:#e8dcc8;">'+fN(totalFlete,0)+'</td>';
     var cifTotalAll = detalle.reduce(function(s,l){
-      var fobLn=l.fob||(l.qty*(l.rmb||0));
-      var pct2=fobTotal>0?fobLn/fobTotal:0;
-      return s+fobLn+(fob*0.065*pct2)+(fob*0.065*pct2)+(totalFlete*pct2)+(fob*0.07*pct2);
-    },0);
-    var cifTotUSDAll = cifTotalAll/S.cifTRM;
-    h += '<td style="padding:11px 12px;text-align:right;color:#c9a227;font-weight:700;">'+fN(cifTotalAll,0)+'</td>';
-    h += '<td style="padding:11px 12px;text-align:right;color:#c9a227;font-weight:700;" colspan="2">$'+fN(cifTotUSDAll,0)+'</td>';
-    h += '<td style="padding:11px 12px;" colspan="2"></td>';
+      var fobLn2 = l.fob||(l.qty*(l.rmb||0))||0;
+      var pct2 = fobTotal>0 ? fobLn2/fobTotal : 0;
+      return s + fobLn2 + (fob*0.065*pct2) + (fob*0.065*pct2) + (totalFlete*pct2) + (fob*0.07*pct2);
+    }, 0);
+    var cifTotUSDAll = S.cifTRM > 0 ? cifTotalAll/S.cifTRM : 0;
+    var pctIncrAll = fobTotal > 0 ? (cifTotalAll - fobTotal)/fobTotal*100 : 0;
+
+    h += '<tr style="background:var(--v);">';
+    h += '<td style="padding:12px;color:#e8dcc8;font-weight:700;font-size:12px;" colspan="3">TOTAL OC</td>';
+    h += '<td style="padding:12px;"></td>';
+    h += '<td style="padding:12px;text-align:right;color:#c9a227;font-weight:700;font-size:13px;">¥'+fN(fobTotal,0)+'</td>';
+    h += '<td style="padding:12px;text-align:right;color:rgba(201,162,39,.6);font-size:10px;">100%</td>';
+    h += '<td style="padding:12px;text-align:right;color:#e8dcc8;">¥'+fN(totalFlete,0)+'</td>';
+    h += '<td style="padding:12px;text-align:right;color:#c9a227;font-weight:700;font-size:13px;">¥'+fN(cifTotalAll,0)+'</td>';
+    h += '<td style="padding:12px;text-align:right;color:#7eb8f7;font-weight:700;"></td>';
+    h += '<td style="padding:12px;text-align:right;color:#7eb8f7;font-weight:700;font-size:13px;">$'+fN(cifTotUSDAll,0)+'</td>';
+    h += '<td style="padding:12px;text-align:right;color:#a5d6a7;font-weight:700;"></td>';
+    h += '<td style="padding:12px;text-align:right;"><span style="color:#c9a227;font-weight:700;">'+pctIncrAll.toFixed(1)+'%</span></td>';
     h += '</tr>';
-    
+
     h += '</tbody></table></div></div>';
   }
-
   return h;
 }
 
