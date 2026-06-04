@@ -1378,7 +1378,7 @@ function pageCIF(){
   html += '<div style="padding:14px 16px;">';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
   html += '<div><label class="form-label">Purchase Order *</label>';
-  html += '<select class="form-input" id="cif-oc"'+(isAdmin?'':' disabled style="background:#f0ede6;"')+' data-action="cif-oc">';
+  html += '<select class="form-input" id="cif-oc"'+(isAdmin?'':' disabled style="background:#f0ede6;"')+' onchange="if(!window._r)_onCifOC()">';
   html += '<option value="">— Seleccionar OC —</option>';
   ocs_disp.forEach(function(c){
     var locked = S.cifFirmes[c.id] ? ' 🔒' : '';
@@ -2682,7 +2682,6 @@ document.addEventListener('click', function(e){
   var action = el.dataset.action;
   var id = el.dataset.id ? +el.dataset.id : null;
   console.log('DELEGATION CLICK:', action, id);
-  console.trace('delegation stack');
 
   if(action==='new-bl'){ openModalBL(null); }
   else if(action==='ver-bl'){ verBL(id); }
