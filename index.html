@@ -2585,6 +2585,12 @@ var _dejarEnFirme = dejarEnFirme;
 var _unlockCIF = unlockCIF;
 var _exportCIF = exportCIF;
 var _onCifOC = onCifOC;
+var _updFotoClick = updFotoClick;
+var _saveProd = saveProd;
+var _addContBL = addContBL;
+var _removeContBL = removeContBL;
+var _toggleFilter = toggleFilter;
+var _addFoto = addFoto;
 var _addCifCont = addCifCont;
 var _updCBM = updCBM;
 
@@ -2645,22 +2651,22 @@ window.addEventListener('error', function(e){
 // window.onAlSku removed - use direct reference
 // window.updTotal - use direct
 // window.saveProd removed
-window.addFoto = function(el){ addFoto(el); };
+// window.addFoto removed (self-ref)
 // window.closeModal removed
-window.exportPDF = function(id){ exportPDF(id); };
-window.toggleFilter = function(k,v){ toggleFilter(k,v); };
+// window.exportPDF removed (self-ref)
+// window.toggleFilter removed (self-ref)
 
 // Expose BL functions globally for inline onclick handlers
-window.openModalBL = function(d){ openModalBL(d); };
-window.verBL = function(id){ verBL(id); };
-window.editEtapaBL = function(id){ editEtapaBL(id); };
+// window.openModalBL removed (self-ref)
+// window.verBL removed (self-ref)
+// window.editEtapaBL removed (self-ref)
 // window.saveBL removed
-window.toggleBLLine = function(i){ toggleBLLine(i); };
-window.splitBLLine = function(i,m){ splitBLLine(i,m); };
+// window.toggleBLLine removed (self-ref)
+// window.splitBLLine removed (self-ref)
 // window.onBLOCChange removed
 // window.updTrackURL removed
 // window.addContBL removed
-window.removeContBL = function(i){ removeContBL(i); };
+// window.removeContBL removed (self-ref)
 // window.updBLLineTotals removed
 
 // Expose other modal functions
@@ -2669,11 +2675,11 @@ window.removeContBL = function(i){ removeContBL(i); };
 // window.updFotoClick removed
 // window.onCifOC removed
 // window.addCifCont removed
-window.dejarEnFirme = function(id){ dejarEnFirme(id); };
-window.unlockCIF = function(id){ unlockCIF(id); };
+// window.dejarEnFirme removed (self-ref)
+// window.unlockCIF removed (self-ref)
 // window.exportCIF removed
-window.exportPDF = function(id){ exportPDF(id); };
-window.toggleFilter = function(k,v){ toggleFilter(k,v); };
+// window.exportPDF removed (self-ref)
+// window.toggleFilter removed (self-ref)
 
 // ─── EVENT DELEGATION (fixes Vercel CSP blocking inline onclick) ───
 document.addEventListener('click', function(e){
