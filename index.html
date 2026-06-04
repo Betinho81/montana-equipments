@@ -634,10 +634,17 @@ function toast(msg,type='success'){
   setTimeout(()=>el.remove(),3100);
 }
 
+var _modalRendering = false;
 function openModal(html){
-  document.getElementById('modal-box').innerHTML=html;
-  document.getElementById('modal-bg').classList.remove('hidden');
-  bindModal();
+  if(_modalRendering) return;
+  _modalRendering = true;
+  try{
+    document.getElementById('modal-box').innerHTML=html;
+    document.getElementById('modal-bg').classList.remove('hidden');
+    bindModal();
+  } finally {
+    _modalRendering = false;
+  }
 }
 function closeModal(){
   document.getElementById('modal-bg').classList.add('hidden');
@@ -688,13 +695,20 @@ function renderSidebar(){
 }
 
 // ─── PAGES ───
+window._r = false;
 function renderPage(){
-  const ma=document.getElementById('main-area');
-  if(S.page==='cots') ma.innerHTML=pageCots();
-  else if(S.page==='prods') ma.innerHTML=pageProds();
-  else if(S.page==='cif') ma.innerHTML=pageCIF();
-  else if(S.page==='bl'){ma.innerHTML=pageBL();bindBL();}
-  bindPage();
+  if(window._r) return;
+  window._r = true;
+  try{
+    const ma=document.getElementById('main-area');
+    if(S.page==='cots') ma.innerHTML=pageCots();
+    else if(S.page==='prods') ma.innerHTML=pageProds();
+    else if(S.page==='cif') ma.innerHTML=pageCIF();
+    else if(S.page==='bl'){ma.innerHTML=pageBL();bindBL();}
+    bindPage();
+  } finally {
+    window._r = false;
+  }
 }
 
 function pageCots(){
@@ -890,7 +904,7 @@ function bindPage(){
     if(c){c.estado='Rechazada';saveData();renderSidebar();renderPage();toast('Cotización rechazada','warn');}
   });
   // Productos
-  document.getElementById('btn-new-prod')?.addEventListener('click',()=>openModal(modalProd(null)));
+  if(document.getElementById('btn-new-prod')) document.getElementById('btn-new-prod').onclick=()=>openModal(modalProd(null));
   document.querySelectorAll('.btn-edit-prod').forEach(b=>b.onclick=()=>{
     const p=S.prods.find(x=>x.id===+b.dataset.id);openModal(modalProd(p));
   });
@@ -905,23 +919,81 @@ function bindPage(){
 function toggleFilter(key,val){S[key]=S[key]===val?'':val;renderPage();}
 
 // ─── MODAL HELPERS ───
+
+function saveCot(){
+  if(S.ncL.length===0){toast('Agrega al menos un producto','error');return;}
+  const oc=nextOC();
+  const total=S.ncL.reduce((s,l)=>s+(l.fob||0),0);
+  const cot={
+    id:Date.now(),oc,fv:'',ano:curYear(),fecha:todayDisp(),
+    cliente:S.ncC||'',notas:S.ncN||'',
+    estado:'Stand By',lineas:S.ncL.length,
+    totalFob:total,totalUsd:0,
+    detalle:S.ncL.map(l=>({...l}))
+  };
+  S.cots.unshift(cot);
+  closeModal();saveData();renderSidebar();renderPage();
+  toast('Cotización '+oc+' guardada como Stand By ✓');
+}
+
+function onAlSku(){
+  try{
+  const sku=document.getElementById('al-sku')?.value||'';
+  console.log('onAlSku fired, sku='+sku+', prods='+S.prods.length);
+  const p=S.prods.find(x=>x.sku===sku);
+  const prev=document.getElementById('prod-preview');
+  if(p&&sku!=='nuevo'){
+    document.getElementById('al-prod').value=p.n||'';
+    document.getElementById('al-rmb').value=p.rmb||'';
+    document.getElementById('al-car').value=p.d||'';
+    if(prev){
+      prev.style.display='flex';
+      document.getElementById('pp-nom').textContent=p.n+(p.ne?' / '+p.ne:'');
+      document.getElementById('pp-car').textContent=p.d||'';
+      const foto=document.getElementById('pp-foto');
+      if(foto) foto.innerHTML=p.fotos&&p.fotos[0]?'<img src="'+p.fotos[0]+'" style="width:48px;height:48px;border-radius:8px;object-fit:cover;">':'<i class="ti ti-package" style="font-size:20px;color:var(--bd);"></i>';
+    }
+    updTotal();
+  } else {
+    if(prev) prev.style.display='none';
+    document.getElementById('al-prod').value='';
+    document.getElementById('al-rmb').value='';
+  }
+  }catch(e){console.error('onAlSku error:',e);}
+}
+
+function saveLine(){
+  const prod=document.getElementById('al-prod')?.value||'';
+  const qty=+(document.getElementById('al-qty')?.value||0);
+  const rmb=+(document.getElementById('al-rmb')?.value||0);
+  const sku=document.getElementById('al-sku')?.value||'';
+  const car=document.getElementById('al-car')?.value||'';
+  const un=document.getElementById('al-un')?.value||'PCS';
+  const aut=document.getElementById('al-aut')?.value||'';
+  if(!prod){toast('Descripción del producto es obligatoria','error');return;}
+  if(!qty){toast('Cantidad es obligatoria','error');return;}
+  if(!rmb){toast('Precio RMB es obligatorio','error');return;}
+  const fob=qty*rmb;
+  S.ncL.push({sku:sku!=='nuevo'?sku:'',p:prod,d:car,qty,u:un,rmb,fob,aut});
+  openModal(modalNewCot());
+}
 function bindModal(){
   document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElementById('modal-bg'))closeModal();};
   document.querySelectorAll('.modal-close,.btn-modal-close').forEach(b=>b.onclick=closeModal);
   // new cot
-  document.getElementById('btn-add-line')?.addEventListener('click',()=>openModal(modalAddLine()));
+  if(document.getElementById('btn-add-line')) document.getElementById('btn-add-line').onclick=()=>openModal(modalAddLine());
   document.querySelectorAll('.btn-del-line').forEach(b=>b.onclick=()=>{S.ncL.splice(+b.dataset.i,1);openModal(modalNewCot());});
-  document.getElementById('btn-save-cot')?.addEventListener('click',saveCot);
-  document.getElementById('nc-cliente')?.addEventListener('input',e=>S.ncC=e.target.value);
-  document.getElementById('nc-notas')?.addEventListener('input',e=>S.ncN=e.target.value);
+  if(document.getElementById('btn-save-cot')) document.getElementById('btn-save-cot').onclick=saveCot;
+  if(document.getElementById('nc-cliente')) document.getElementById('nc-cliente').oninput=e=>{S.ncC=e.target.value;};
+  if(document.getElementById('nc-notas')) document.getElementById('nc-notas').oninput=e=>{S.ncN=e.target.value;};
   // add line
-  document.getElementById('al-sku')?.addEventListener('change',onAlSku);
-  document.getElementById('al-qty')?.addEventListener('input',updTotal);
-  document.getElementById('al-rmb')?.addEventListener('input',updTotal);
-  document.getElementById('btn-save-line')?.addEventListener('click',saveLine);
+  if(document.getElementById('al-sku')) document.getElementById('al-sku').onchange=onAlSku;
+  if(document.getElementById('al-qty')) document.getElementById('al-qty').oninput=updTotal;
+  if(document.getElementById('al-rmb')) document.getElementById('al-rmb').oninput=updTotal;
+  if(document.getElementById('btn-save-line')) document.getElementById('btn-save-line').onclick=saveLine;
   // prod
-  document.getElementById('btn-save-prod')?.addEventListener('click',saveProd);
-  document.getElementById('fi-foto')?.addEventListener('change',function(){addFoto(this);});
+  if(document.getElementById('btn-save-prod')) document.getElementById('btn-save-prod').onclick=saveProd;
+  if(document.getElementById('fi-foto')) document.getElementById('fi-foto').onchange=function(){addFoto(this);};
   // ver cot
   document.querySelectorAll('.btn-apro-modal').forEach(b=>b.onclick=()=>{
     const c=S.cots.find(x=>x.id===+b.dataset.id);
@@ -1020,7 +1092,7 @@ function modalAddLine(){
   <div class="modal-body">
     <div style="margin-bottom:12px;">
       <label class="form-label">Seleccionar del catálogo</label>
-      <select class="form-input" id="al-sku">
+      <select class="form-input" id="al-sku" onchange="onAlSku()">
         <option value="">— Elegir SKU del catálogo —</option>
         ${S.prods.map(p=>`<option value="${p.sku}">${p.sku} — ${p.n}${p.ne?" / "+p.ne:""}</option>`).join('')}
         <option value="nuevo">+ Producto nuevo sin SKU</option>
@@ -1037,11 +1109,11 @@ function modalAddLine(){
       <div class="form-group full"><label class="form-label">Características técnicas</label>
         <textarea class="form-input form-textarea" id="al-car" placeholder="Material, medidas, presión..."></textarea></div>
       <div class="form-group"><label class="form-label">Cantidad *</label>
-        <input class="form-input" id="al-qty" type="number" placeholder="0" min="1" data-action="upd-total"></div>
+        <input class="form-input" id="al-qty" type="number" placeholder="0" min="1" oninput="updTotal()"></div>
       <div class="form-group"><label class="form-label">Unidad</label>
         <select class="form-input" id="al-un"><option>PCS</option><option>SET</option><option>ROLL</option><option>KG</option></select></div>
       <div class="form-group"><label class="form-label">Precio RMB ¥ *</label>
-        <input class="form-input" id="al-rmb" type="number" placeholder="0.00" step="0.01" data-action="upd-total"></div>
+        <input class="form-input" id="al-rmb" type="number" placeholder="0.00" step="0.01" oninput="updTotal()"></div>
       <div class="form-group"><label class="form-label">Total FOB (calculado)</label>
         <div style="background:#e8f5e9;border:1px solid #2e7d32;border-radius:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;">
           <span id="al-total" style="font-size:17px;font-weight:600;color:var(--v);">¥0</span>
@@ -2415,69 +2487,6 @@ function exportPDF(id){
 
 
 // ─── CIF FIRME FUNCTIONS ───
-function dejarEnFirme(ocId){
-  if(!ocId){toast('Select a PO primero','warn');return;}
-  const oc = S.cots.find(x=>x.id===ocId);
-  if(!oc){return;}
-  
-  // Confirm dialog
-  const confirmed = confirm(
-    '¿Dejar en FIRME la liquidación CIF de la OC ' + oc.oc + '?\n\n' +
-    'Una vez en firme NO se podrán hacer cambios.\n' +
-    'Solo el administrador podrá desbloquearla con clave especial.\n\n' +
-    '¿Confirmar?'
-  );
-  if(!confirmed) return;
-
-  const fecha = new Date().toLocaleDateString('es-CO', {year:'numeric',month:'2-digit',day:'2-digit'});
-  S.cifFirmes[ocId] = {
-    fecha: fecha,
-    usuario: S.user.n,
-    trm: S.cifTRM,
-    cop: S.cifCOP,
-    conts: JSON.parse(JSON.stringify(S.cifConts)),
-  };
-  saveCIFFirmes();
-  toast('✅ Liquidación OC ' + oc.oc + ' dejada EN FIRME · ' + fecha);
-  renderPage();
-}
-
-function unlockCIF(ocId){
-  const oc = S.cots.find(x=>x.id===ocId);
-  if(!oc){return;}
-  const firme = S.cifFirmes[ocId];
-  if(!firme){return;}
-  
-  const clave = prompt(
-    'DESBLOQUEAR liquidación CIF · OC ' + oc.oc + '\n\n' +
-    'Aprobada por: ' + firme.usuario + ' · ' + firme.fecha + '\n\n' +
-    'Ingrese la clave de administrador para desbloquear:'
-  );
-  if(clave === null) return; // Cancelled
-  
-  if(clave === 'montana2024'){
-    delete S.cifFirmes[ocId];
-    saveCIFFirmes();
-    toast('🔓 Liquidación OC ' + oc.oc + ' desbloqueada — puede realizar cambios', 'warn');
-    renderPage();
-  } else {
-    toast('❌ Clave incorrecta — no se pudo desbloquear', 'error');
-  }
-}
-
-function saveCIFFirmes(){
-  try{
-    localStorage.setItem('mt_cif_firmes', JSON.stringify(S.cifFirmes));
-  }catch(e){}
-}
-
-function loadCIFFirmes(){
-  try{
-    const d = localStorage.getItem('mt_cif_firmes');
-    if(d) S.cifFirmes = JSON.parse(d);
-  }catch(e){}
-}
-
 function updTotal(){
   const q=+(document.getElementById('al-qty')?.value||0);
   const r=+(document.getElementById('al-rmb')?.value||0);
@@ -2529,6 +2538,24 @@ function updFotoClick(){
   if(el) el.click();
 }
 
+// Global error handler to catch stack overflow
+window.addEventListener('error', function(e){
+  if(e.message && e.message.includes('call stack')){
+    console.error('STACK OVERFLOW - stack trace:', e.error && e.error.stack ? e.error.stack.split('\n').slice(0,10).join('\n') : 'no trace');
+  }
+});
+
+// Expose ALL modal functions globally
+// window.saveCot - use direct
+// window.saveLine - use direct
+// window.onAlSku removed - use direct reference
+// window.updTotal - use direct
+window.saveProd = function(){ saveProd(); };
+window.addFoto = function(el){ addFoto(el); };
+window.closeModal = function(){ closeModal(); };
+window.exportPDF = function(id){ exportPDF(id); };
+window.toggleFilter = function(k,v){ toggleFilter(k,v); };
+
 // Expose BL functions globally for inline onclick handlers
 window.openModalBL = function(d){ openModalBL(d); };
 window.verBL = function(id){ verBL(id); };
@@ -2560,6 +2587,8 @@ document.addEventListener('click', function(e){
   if(!el) return;
   var action = el.dataset.action;
   var id = el.dataset.id ? +el.dataset.id : null;
+  console.log('DELEGATION CLICK:', action, id);
+  console.trace('delegation stack');
 
   if(action==='new-bl'){ openModalBL(null); }
   else if(action==='ver-bl'){ verBL(id); }
@@ -2613,37 +2642,7 @@ document.addEventListener('click', function(e){
   else if(action==='new-prod'){ openModal(modalProd(null)); }
 });
 
-document.addEventListener('input', function(e){
-  var el=e.target, act=el.dataset.action;
-  if(!act) return;
-  if(act==='cif-trm'){ S.cifTRM=+el.value;renderPage(); }
-  else if(act==='cif-cop'){ S.cifCOP=+el.value;renderPage(); }
-  else if(act==='cif-cont'){
-    var i=+el.dataset.idx,f=el.dataset.field;
-    if(S.cifConts[i]) S.cifConts[i][f]=+el.value; renderPage();
-  }
-  else if(act==='bl-search'){ S.blSearch=el.value;renderPage(); }
-  else if(act==='prod-search'){ S.pS=el.value;renderPage(); }
-  else if(act==='cot-search'){ S.fS=el.value;renderPage(); }
-  else if(act==='upd-total'){ updTotal(); }
-  else if(act==='upd-cbm'){ updCBM(); }
-  else if(act==='upd-track'){ updTrackURL(); }
-});
-
-document.addEventListener('change', function(e){
-  var el=e.target, act=el.dataset.action;
-  if(!act) return;
-  if(act==='cif-oc'){ onCifOC(); }
-  else if(act==='bl-etapa-filter'){ S.blEtapa=el.value;renderPage(); }
-  else if(act==='prod-grupo'){ S.pG=el.value;renderPage(); }
-  else if(act==='cot-estado'){ S.fE=el.value;renderPage(); }
-  else if(act==='cot-ano'){ S.fA=el.value;renderPage(); }
-  else if(act==='bl-oc'){ onBLOCChange(); }
-  else if(act==='upd-track'){ updTrackURL(); }
-  else if(act==='bl-etapa-btn'){
-    if(window._blState) window._blState.etapa=el.value;
-  }
-});
+// input/change: handled inline
 
 // ─── INIT ───
 document.getElementById('btn-login').onclick=doLogin;
