@@ -648,6 +648,9 @@ function openModal(html){
 }
 function closeModal(){
   document.getElementById('modal-bg').classList.add('hidden');
+  document.getElementById('modal-box').innerHTML='';
+  _modalRendering = false;
+  window._r = false;
 }
 
 // ─── AUTH ───
@@ -1035,7 +1038,7 @@ function modalNewCot(){
   return `
   <div class="modal-head">
     <div><div class="modal-title">Nueva Cotización</div></div>
-    <button class="modal-close"><i class="ti ti-x"></i></button>
+    <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
   </div>
   <div class="modal-body">
     <div class="auto-strip">
@@ -1076,7 +1079,7 @@ function modalNewCot(){
     </div>
   </div>
   <div class="modal-foot">
-    <button class="btn btn-out btn-sm btn-modal-close">Cancel</button>
+    <button class="btn btn-out btn-sm btn-modal-close" onclick="closeModal()">Cancel</button>
     <button class="btn btn-gold btn-sm" id="btn-save-cot" ${S.ncL.length===0?'disabled style="opacity:.4;"':''}>
       <i class="ti ti-device-floppy"></i>Guardar como Stand By
     </button>
@@ -1087,7 +1090,7 @@ function modalAddLine(){
   return `
   <div class="modal-head">
     <div><div class="modal-title"><i class="ti ti-plus" style="color:var(--d);margin-right:6px;"></i>Add Producto</div></div>
-    <button class="modal-close"><i class="ti ti-x"></i></button>
+    <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
   </div>
   <div class="modal-body">
     <div style="margin-bottom:12px;">
@@ -1127,7 +1130,7 @@ function modalAddLine(){
     </div>
   </div>
   <div class="modal-foot">
-    <button class="btn btn-out btn-sm btn-modal-close">Cancel</button>
+    <button class="btn btn-out btn-sm btn-modal-close" onclick="closeModal()">Cancel</button>
     <button class="btn btn-gold btn-sm" id="btn-save-line"><i class="ti ti-plus"></i>Add a Cotización</button>
   </div>`;
 }
@@ -1145,7 +1148,7 @@ function modalVerCot(id){
     <div style="display:flex;align-items:center;gap:8px;">
       ${B(c.estado)}
       <button class="btn btn-pdf btn-sm" onclick="exportPDF(${c.id})"><i class="ti ti-file-type-pdf"></i>PDF</button>
-      <button class="modal-close"><i class="ti ti-x"></i></button>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
   </div>
   <div class="modal-body">
@@ -1201,7 +1204,7 @@ function modalProd(p){
   var h = '';
   h += '<div class="modal-head">';
   h += '<div><div class="modal-title">'+(d.id?'Edit':'Nuevo')+' Producto</div></div>';
-  h += '<button class="modal-close"><i class="ti ti-x"></i></button></div>';
+  h += '<button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button></div>';
   h += '<div class="modal-body">';
 
   // Main fields grid
@@ -1271,7 +1274,7 @@ function modalProd(p){
   h += '</div>';
   h += '<input type="hidden" id="p-id" value="'+(d.id||'')+'">';
   h += '</div>';
-  h += '<div class="modal-foot"><button class="btn btn-out btn-sm btn-modal-close">Cancel</button>';
+  h += '<div class="modal-foot"><button class="btn btn-out btn-sm btn-modal-close" onclick="closeModal()">Cancel</button>';
   h += '<button class="btn btn-gold btn-sm" id="btn-save-prod"><i class="ti ti-device-floppy"></i>Guardar</button></div>';
   return h;
 }
@@ -1821,7 +1824,7 @@ function renderModalBL(d, ocs_ok){
   h += '<div class="modal-head">';
   h += '<div><div class="modal-title">'+(state.id?'Edit':'New')+' Bill of Lading</div>';
   if(state.id && d.blNum) h += '<div class="modal-sub">BL: '+d.blNum+'</div>';
-  h += '</div><button class="modal-close"><i class="ti ti-x"></i></button></div>';
+  h += '</div><button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button></div>';
   h += '<div class="modal-body">';
 
   // ── STEP 1: Select PO ──
@@ -2014,7 +2017,7 @@ function renderModalBL(d, ocs_ok){
   h += '<input type="hidden" id="bl-oc-id" value="'+(state.ocId||'')+'">';
   h += '</div>';
   h += '<div class="modal-foot">';
-  h += '<button class="btn btn-out btn-sm btn-modal-close">Cancel</button>';
+  h += '<button class="btn btn-out btn-sm btn-modal-close" onclick="closeModal()">Cancel</button>';
   if(selOC){
     h += '<button class="btn btn-gold btn-sm" data-action="save-bl"><i class="ti ti-device-floppy"></i>Save BL</button>';
   }
@@ -2324,7 +2327,7 @@ function verBL(id){
   h+='<span class="badge" style="background:'+col.bg+';color:'+col.color+';">'+b.etapa+'</span>';
   if(b.pdfUrl) h+='<a href="'+b.pdfUrl+'" target="_blank" class="btn btn-pdf btn-sm"><i class="ti ti-file-type-pdf"></i>PDF BL</a>';
   if(trackURL) h+='<a href="'+trackURL+'" target="_blank" class="btn btn-sm" style="background:#e8f5e9;color:#2e7d32;border:1px solid #2e7d32;"><i class="ti ti-external-link"></i>Tracking</a>';
-  h+='<button class="modal-close"><i class="ti ti-x"></i></button></div></div>';
+  h+='<button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button></div></div>';
 
   h+='<div class="modal-body">';
   // Strip info
