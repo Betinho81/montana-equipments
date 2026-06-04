@@ -1900,7 +1900,7 @@ function renderModalBL(d, ocs_ok){
   // ── STEP 1: Select PO ──
   h += '<div style="background:var(--dp);border-radius:9px;padding:12px;margin-bottom:14px;">';
   h += '<div style="font-size:11px;font-weight:600;color:var(--v);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;"><i class="ti ti-list-check"></i>Step 1 · Purchase Order</div>';
-  h += '<select class="form-input" id="bl-oc" '+(state.id?'disabled':'')+' data-action="bl-oc">';
+  h += '<select class="form-input" id="bl-oc" '+(state.id?'disabled':' onchange="if(!window._r)_onBLOCChange()"')+'>';
   h += '<option value="">— Select Approved PO —</option>';
   ocs_ok.forEach(function(c){
     h += '<option value="'+c.id+'"'+(state.ocId===c.id?' selected':'')+'>'+c.oc+' · '+(c.fv||'S/F')+' · '+c.estado+'</option>';
@@ -2019,7 +2019,7 @@ function renderModalBL(d, ocs_ok){
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
 
     h += '<div><label class="form-label">Shipping Line *</label>';
-    h += '<select class="form-input" id="bl-naviera" data-action="upd-track">';
+    h += '<select class="form-input" id="bl-naviera" onchange="if(!window._r)_updTrackURL()">';
     h += '<option value="">— Select —</option>';
     Object.keys(NAVIERAS).forEach(function(n){
       h += '<option value="'+n+'"'+(d.naviera===n?' selected':'')+'>'+n+'</option>';
