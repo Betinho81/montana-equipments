@@ -1424,7 +1424,7 @@ function pageCIF(){
     html += 'Agrega los contenedores de esta OC con sus costos de flete</div>';
   } else {
     html += '<div style="overflow-x:auto;"><table><thead><tr>';
-    html += '<th>Contenedor #</th><th style="text-align:right">Ocean Fee (RMB)</th><th style="text-align:right">Container (USD)</th>';
+    html += '<th>Cont. #</th><th>No. Físico (Naviera)</th><th style="text-align:right">Ocean Fee (RMB)</th><th style="text-align:right">Container (USD)</th>';
     html += '<th style="text-align:right">Local Charge (RMB)</th><th style="text-align:right">Insurance (RMB)</th>';
     html += '<th style="text-align:right">Truck Fee (RMB)</th><th style="text-align:right">Total Flete RMB</th><th></th>';
     html += '</tr></thead><tbody>';
@@ -1434,7 +1434,11 @@ function pageCIF(){
       var inp = function(field, val){
         return '<input class="form-input" type="number" step="0.01" value="'+val+'" style="width:90px;padding:4px 7px;"'+
           (canEdit ? ' oninput="S.cifConts['+i+'].'+field+'=+this.value;renderPage()"' : ' readonly style="background:#f0ede6;"')+'>'; };
-      html += '<tr><td><b style="color:var(--v);">Cont. '+(c.num||i+1)+'</b></td>';
+      html += '<tr><td><b style="color:var(--v);">'+(c.num||i+1)+'</b></td>';
+      html += '<td>'+(canEdit
+        ? '<input class="form-input" type="text" value="'+(c.numFisico||'')+'" placeholder="MSMU5342790" style="width:130px;padding:4px 7px;font-size:11px;" oninput="S.cifConts['+i+'].numFisico=this.value" title="Número físico asignado por la naviera">'
+        : '<span style="font-size:11.5px;color:var(--v);padding:4px 0;display:inline-block;font-weight:500;">'+(c.numFisico||'—')+'</span>'
+      )+'</td>';
       html += '<td>'+inp('ocean',c.ocean||0)+'</td>';
       html += '<td>'+inp('contUsd',c.contUsd||0)+'</td>';
       html += '<td>'+inp('local',c.local||0)+'</td>';
@@ -1466,6 +1470,25 @@ function pageCIF(){
   }
 
   return html;
+}
+
+// ─── HELPER: Flete por línea usando BL → número físico contenedor ───
+function getFleteParaLinea(oc, lineIdx, totalFlete, pct){
+  var blsOC = S.bls.filter(function(b){ return b.ocId===oc.id; });
+  for(var bi=0;bi<blsOC.length;bi++){
+    var bl=blsOC[bi];
+    var blLine=(bl.lines||[]).find(function(l){ return l.lineIdx===lineIdx; });
+    if(blLine&&blLine.cont&&blLine.cont.trim()){
+      var contMatch=S.cifConts.find(function(c){
+        return c.numFisico&&c.numFisico.trim().toUpperCase()===blLine.cont.trim().toUpperCase();
+      });
+      if(contMatch){
+        var fleteCont=(contMatch.ocean||0)+(contMatch.local||0)+(contMatch.insurance||0)+(contMatch.truck||0);
+        return {flete:fleteCont,contNum:blLine.cont,modo:'directo'};
+      }
+    }
+  }
+  return {flete:totalFlete*pct,contNum:null,modo:'prorrateo'};
 }
 
 function calcCIF(oc){
@@ -1564,6 +1587,7 @@ function calcCIF(oc){
       {label:'FOB/UN ¥', align:'right'},
       {label:'FOB Total ¥', align:'right'},
       {label:'% Part.', align:'right'},
+      {label:'Cont.', align:'center'},
       {label:'Flete asig. ¥', align:'right'},
       {label:'CIF Total ¥', align:'right'},
       {label:'CIF/UN USD', align:'right'},
@@ -1582,11 +1606,15 @@ function calcCIF(oc){
       var rmb = +(l.rmb||0);
       var pct = fobTotal > 0 ? fobLn/fobTotal : 0;
 
-      // Prorate all costs by FOB participation
-      var comAilyLn  = fob * 0.065 * pct;
-      var comRafaLn  = fob * 0.065 * pct;
-      var fleteLn    = totalFlete * pct;
-      var jahLn      = fob * 0.07 * pct;
+      // Flete: directo por contenedor físico (BL) o prorrateo fallback
+      var fleteInfo  = getFleteParaLinea(oc, i, totalFlete, pct);
+      var fleteLn    = fleteInfo.flete;
+      var fleteMode  = fleteInfo.modo;
+      var fleteContNum = fleteInfo.contNum;
+      // Comisiones y JAH sobre FOB de la línea (no proporcional al total)
+      var comAilyLn  = fobLn * 0.065;
+      var comRafaLn  = fobLn * 0.065;
+      var jahLn      = fobLn * 0.07;
       var cifLn      = fobLn + comAilyLn + comRafaLn + fleteLn + jahLn;
       var cifUnUSD   = (qty > 0 && S.cifTRM > 0) ? cifLn / S.cifTRM / qty : 0;
       var cifTotUSD  = S.cifTRM > 0 ? cifLn / S.cifTRM : 0;
@@ -1612,6 +1640,14 @@ function calcCIF(oc){
       h += '<td style="padding:11px 12px;text-align:right;font-weight:700;color:var(--v);">¥'+fN(fobLn,0)+'</td>';
       // % Participación
       h += '<td style="padding:11px 12px;text-align:right;"><span style="background:#f0f7f3;color:#1a5c3a;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;">'+(pct*100).toFixed(1)+'%</span></td>';
+      // Contenedor asignado (BL → numFisico) o prorrateo
+      h += '<td style="padding:11px 12px;text-align:center;">';
+      if(fleteMode==='directo'){
+        h += '<span style="font-size:9px;background:#e3f2fd;color:#1565c0;padding:2px 6px;border-radius:8px;font-weight:600;white-space:nowrap;" title="Flete directo del contenedor '+(fleteContNum||'')+'">'+(fleteContNum||'').substring(0,11)+'</span>';
+      } else {
+        h += '<span style="font-size:9px;background:#fff3e0;color:#e65100;padding:2px 6px;border-radius:8px;" title="Sin BL asignado — prorrateo por FOB">Prorrateo</span>';
+      }
+      h += '</td>';
       // Flete asignado
       h += '<td style="padding:11px 12px;text-align:right;color:#666;">¥'+fN(fleteLn,0)+'</td>';
       // CIF Total RMB
@@ -1629,10 +1665,11 @@ function calcCIF(oc){
     });
 
     // Totals row
-    var cifTotalAll = detalle.reduce(function(s,l){
+    var cifTotalAll = detalle.reduce(function(s,l,idx){
       var fobLn2 = l.fob||(l.qty*(l.rmb||0))||0;
       var pct2 = fobTotal>0 ? fobLn2/fobTotal : 0;
-      return s + fobLn2 + (fob*0.065*pct2) + (fob*0.065*pct2) + (totalFlete*pct2) + (fob*0.07*pct2);
+      var fi2 = getFleteParaLinea(oc, idx, totalFlete, pct2);
+      return s + fobLn2 + (fobLn2*0.065) + (fobLn2*0.065) + fi2.flete + (fobLn2*0.07);
     }, 0);
     var cifTotUSDAll = S.cifTRM > 0 ? cifTotalAll/S.cifTRM : 0;
     var pctIncrAll = fobTotal > 0 ? (cifTotalAll - fobTotal)/fobTotal*100 : 0;
@@ -1662,8 +1699,10 @@ function calcCIF(oc){
       var fobLn = l.fob || (l.qty*(l.rmb||0)) || 0;
       var qty = +(l.qty||0);
       var pct = fobTotal > 0 ? fobLn/fobTotal : 0;
-      var comAilyLn = fob*0.065*pct, comRafaLn = fob*0.065*pct;
-      var fleteLn = totalFlete*pct, jahLn = fob*0.07*pct;
+      var fleteInfoR = getFleteParaLinea(oc, detalle.indexOf(l), totalFlete, pct);
+      // Comisiones y JAH sobre FOB de la línea
+      var comAilyLn = fobLn*0.065, comRafaLn = fobLn*0.065;
+      var fleteLn = fleteInfoR.flete, jahLn = fobLn*0.07;
       var cifLn = fobLn+comAilyLn+comRafaLn+fleteLn+jahLn;
       var cifUnUSD = (qty>0&&S.cifTRM>0) ? cifLn/S.cifTRM/qty : 0;
       var cifTotUSD = S.cifTRM>0 ? cifLn/S.cifTRM : 0;
