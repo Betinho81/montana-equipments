@@ -373,6 +373,8 @@ tr:last-child td{border-bottom:none;}
         <span class="tb-uname" id="tb-uname">—</span>
         <span class="tb-role" id="tb-role">—</span>
       </div>
+      <button class="tb-logout" id="btn-backup" title="Exportar backup de datos" style="color:rgba(201,162,39,.8);border-color:rgba(201,162,39,.3);"><i class="ti ti-database-export"></i>Backup</button>
+      <button class="tb-logout" id="btn-restore" title="Importar backup de datos" style="color:rgba(232,220,200,.5);border-color:rgba(232,220,200,.15);"><i class="ti ti-database-import"></i>Restore</button>
       <button class="tb-logout" id="btn-logout"><i class="ti ti-logout"></i>Salir</button>
     </div>
   </div>
@@ -2971,12 +2973,63 @@ document.addEventListener('click', function(e){
 
 // input/change: handled inline
 
+// ─── BACKUP / RESTORE ───
+function exportBackup(){
+  try{
+    var data = {};
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k&&k.startsWith('mt_')) data[k]=localStorage.getItem(k);
+    }
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var fecha = new Date().toISOString().split('T')[0];
+    a.href = url;
+    a.download = 'montana_backup_'+fecha+'.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Backup exportado: montana_backup_'+fecha+'.json ✓');
+  }catch(e){
+    toast('Error al exportar: '+e.message,'error');
+  }
+}
+
+function importBackup(){
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var data = JSON.parse(ev.target.result);
+        var keys = Object.keys(data).filter(function(k){return k.startsWith('mt_');});
+        if(keys.length===0){toast('Archivo no válido — no contiene datos mt_','error');return;}
+        if(!confirm('¿Restaurar backup?\n\nSe sobrescribirán '+keys.length+' clave(s):\n'+keys.join(', ')+'\n\nEsto no se puede deshacer.')){return;}
+        keys.forEach(function(k){localStorage.setItem(k,data[k]);});
+        toast('Backup restaurado — '+keys.length+' claves ✓');
+        setTimeout(function(){location.reload();},1200);
+      }catch(err){
+        toast('Error al leer el archivo: '+err.message,'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
 // ─── INIT ───
 document.getElementById('btn-login').onclick=doLogin;
 document.getElementById('le').onkeydown=e=>{if(e.key==='Enter')doLogin();};
 document.getElementById('lp').onkeydown=e=>{if(e.key==='Enter')doLogin();};
 
 document.getElementById('btn-logout').onclick=doLogout;
+document.getElementById('btn-backup').onclick=exportBackup;
+document.getElementById('btn-restore').onclick=importBackup;
 </script>
 </body>
 </html>
