@@ -1474,35 +1474,56 @@ function pageCIF(){
 
 // ─── HELPER: Flete por línea usando BL → número físico contenedor ───
 function getFleteParaLinea(oc, lineIdx, totalFlete, pct){
-  // 1. Intentar por BL → número físico de contenedor
+  // 1. Intentar por BL -> numero fisico de contenedor
   var blsOC = S.bls.filter(function(b){ return b.ocId===oc.id; });
+  var blLineFound = null;
+  var blContNum = null;
   for(var bi=0;bi<blsOC.length;bi++){
     var bl=blsOC[bi];
     var blLine=(bl.lines||[]).find(function(l){ return l.lineIdx===lineIdx; });
     if(blLine&&blLine.cont&&blLine.cont.trim()){
+      blLineFound = blLine;
+      blContNum = blLine.cont.trim().toUpperCase();
+      // Buscar en S.cifConts (activos en pantalla)
       var contMatch=S.cifConts.find(function(c){
-        return c.numFisico&&c.numFisico.trim().toUpperCase()===blLine.cont.trim().toUpperCase();
+        return c.numFisico&&c.numFisico.trim().toUpperCase()===blContNum;
       });
       if(contMatch){
         var fleteCont=(contMatch.ocean||0)+(contMatch.local||0)+(contMatch.insurance||0)+(contMatch.truck||0);
-        return {flete:fleteCont,contNum:blLine.cont,modo:'directo'};
+        return {flete:fleteCont,contNum:blLine.cont.trim(),modo:'directo'};
+      }
+      // Buscar en cifFirmes por numFisico
+      var firme = S.cifFirmes&&S.cifFirmes[oc.id];
+      if(firme&&firme.conts){
+        var contFirme = firme.conts.find(function(c){
+          return c.numFisico&&c.numFisico.trim().toUpperCase()===blContNum;
+        });
+        if(contFirme){
+          var fleteF=(+(contFirme.ocean||0))+(+(contFirme.local||0))+(+(contFirme.insurance||0))+(+(contFirme.truck||0));
+          return {flete:fleteF,contNum:blLine.cont.trim(),modo:'directo'};
+        }
       }
     }
   }
-  // 2. Fallback: asignar contenedor por índice (línea 0 → cont 0, línea 1 → cont 1, etc.)
-  //    Si hay al menos un contenedor con datos reales, usar asignación 1:1
-  var contsReales = S.cifConts.filter(function(c){
-    return (c.ocean||0)+(c.local||0)+(c.insurance||0)+(c.truck||0) > 0;
-  });
-  if(contsReales.length > 0){
-    // Asignar por índice: si hay más líneas que contenedores, el último contenedor se comparte
-    var contIdx = Math.min(lineIdx, contsReales.length - 1);
-    var contAsg = contsReales[contIdx];
-    var fleteCont = (contAsg.ocean||0)+(contAsg.local||0)+(contAsg.insurance||0)+(contAsg.truck||0);
-    var label = contAsg.numFisico || ('Cont.'+(contIdx+1));
-    return {flete:fleteCont, contNum:label, modo:'indice'};
+  // 2. Si hay BL con linea asignada pero no se encontro el contenedor por numFisico,
+  //    usar prorrateo - NO usar indice porque el orden del array puede ser incorrecto
+  if(blLineFound){
+    return {flete:totalFlete*pct, contNum:blContNum, modo:'prorrateo'};
   }
-  // 3. Último fallback: prorrateo por % FOB
+  // 3. Sin BL: asignar por indice solo si NO hay BLs registrados para esta OC
+  if(blsOC.length === 0){
+    var contsReales = S.cifConts.filter(function(c){
+      return (c.ocean||0)+(c.local||0)+(c.insurance||0)+(c.truck||0) > 0;
+    });
+    if(contsReales.length > 0){
+      var contIdx = Math.min(lineIdx, contsReales.length - 1);
+      var contAsg = contsReales[contIdx];
+      var fleteIdx = (contAsg.ocean||0)+(contAsg.local||0)+(contAsg.insurance||0)+(contAsg.truck||0);
+      var label = contAsg.numFisico || ('Cont.'+(contIdx+1));
+      return {flete:fleteIdx, contNum:label, modo:'indice'};
+    }
+  }
+  // 4. Ultimo fallback: prorrateo por % FOB
   return {flete:totalFlete*pct, contNum:null, modo:'prorrateo'};
 }
 
