@@ -2620,8 +2620,17 @@ function saveBL(){
 
   // Build conts array from unique container numbers in lines
   var contNums = [...new Set(finalLines.map(function(l){return l.cont;}).filter(Boolean))];
-  var conts = contNums.map(function(num,i){return {num:i+1,numFisico:num,tipo:"40'HQ",cbm:0,peso:0};});
-  if(conts.length===0) conts=[{num:1,numFisico:'',tipo:"40'HQ",cbm:0,peso:0}];
+  var conts = contNums.map(function(num,i){
+    // Distribute CBM and peso proportionally — for now assign to first cont, rest 0
+    return {num:i+1, numFisico:num, tipo:"40'HQ", cbm:i===0?totalCBM:0, peso:i===0?totalPeso:0};
+  });
+  if(conts.length===0) conts=[{num:1,numFisico:'',tipo:"40'HQ",cbm:totalCBM,peso:totalPeso}];
+  // If multiple containers, distribute evenly
+  if(conts.length>1){
+    var cbmPerCont = totalCBM>0 ? +(totalCBM/conts.length).toFixed(2) : 0;
+    var pesoPerCont = totalPeso>0 ? +(totalPeso/conts.length).toFixed(0) : 0;
+    conts = conts.map(function(c){return Object.assign({},c,{cbm:cbmPerCont,peso:pesoPerCont});});
+  }
 
   var id = state.id || 0;
   var bl = {
