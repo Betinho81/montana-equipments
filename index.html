@@ -2665,8 +2665,8 @@ function verBL(id){
   var oc=S.cots.find(function(c){return c.id===b.ocId;});
   var col=BL_ETAPA_COLORS[b.etapa]||{bg:'#f0ede6',color:'#5a5a5a'};
   var trackURL=blTrackingURL(b.naviera,b.blNum);
-  var totalCBM=b.conts.reduce(function(s,c){return s+(+c.cbm||0);},0);
-  var totalPeso=b.conts.reduce(function(s,c){return s+(+c.peso||0);},0);
+  var totalCBM = b.totalCBM || b.conts.reduce(function(s,c){return s+(+c.cbm||0);},0);
+  var totalPeso = b.totalPeso || b.conts.reduce(function(s,c){return s+(+c.peso||0);},0);
 
   var h='<div class="modal-head">';
   h+='<div><div class="modal-title">BL: '+b.blNum+'</div>';
