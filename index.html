@@ -592,12 +592,12 @@ function loadData(){
     const c=localStorage.getItem('mt_cots');
     const p=localStorage.getItem('mt_prods');
     const b=localStorage.getItem('mt_bls');
-    S.cots = c?JSON.parse(c):[...OCS_INIT];
-    S.prods = p?JSON.parse(p):[...PRODS_INIT];
+    S.cots = c?JSON.parse(c):OCS_INIT.map(function(x){return Object.assign({},x);});
+    S.prods = p?JSON.parse(p):PRODS_INIT.map(function(x){return Object.assign({},x);});
     S.bls = b?JSON.parse(b):[];
   }catch(e){
-    S.cots=[...OCS_INIT];
-    S.prods=[...PRODS_INIT];
+    S.cots=OCS_INIT.map(function(x){return Object.assign({},x);});
+    S.prods=PRODS_INIT.map(function(x){return Object.assign({},x);});
     S.bls=[];
   }
 }
@@ -614,7 +614,7 @@ const curYear=()=>new Date().getFullYear();
 
 function nextOC(){
   const nums=S.cots.map(c=>parseInt(c.oc)).filter(n=>!isNaN(n));
-  return String(Math.max(...nums,31)+1).padStart(3,'0')+'/'+curYear();
+  var maxN=31; nums.forEach(function(n){if(n>maxN)maxN=n;}); return String(maxN+1).padStart(3,'0')+'/'+curYear();
 }
 
 const BADGES={
@@ -727,7 +727,7 @@ function pageCots(){
     return true;
   });
   const byE=e=>S.cots.filter(c=>c.estado===e).length;
-  const anos=[...new Set(S.cots.map(c=>c.ano))].sort().reverse();
+  var _aset={}; S.cots.forEach(function(c){if(c.ano)_aset[c.ano]=1;}); var anos=Object.keys(_aset).sort().reverse();
   const adminUser = isAdmin();
   const newCotBtn = adminUser
     ? '<button class="btn btn-gold" id="btn-new-cot"><i class="ti ti-plus"></i>Nueva Cotización</button>'
@@ -821,7 +821,7 @@ function pageCots(){
 }
 
 function pageProds(){
-  var grupos=[...new Set(S.prods.map(function(p){return p.g;}))].sort();
+  var _gset={}; S.prods.forEach(function(p){if(p.g)_gset[p.g]=1;}); var grupos=Object.keys(_gset).sort();
   var fil=S.prods.filter(function(p){
     if(S.pS&&!(p.sku+' '+p.n+' '+(p.ne||'')).toLowerCase().includes(S.pS.toLowerCase()))return false;
     if(S.pG&&p.g!==S.pG)return false;
@@ -872,8 +872,7 @@ function pageProds(){
 
     // Foto
     if(fotoSrc){
-      h += '<img class="prod-foto" src="'+fotoSrc+'" alt="'+p.n+'" onerror="this.style.display='none';this.nextSibling.style.display='flex'">';
-      h += '<div class="prod-foto-placeholder" style="display:none;"><i class="ti '+icon+'" style="font-size:48px;color:rgba(201,162,39,.4);"></i></div>';
+      h += '<img class="prod-foto" src="'+fotoSrc+'" alt="'+p.n+'">';
     } else {
       h += '<div class="prod-foto-placeholder"><i class="ti '+icon+'" style="font-size:48px;color:rgba(201,162,39,.4);"></i></div>';
     }
@@ -947,7 +946,7 @@ function saveCot(){
     cliente:S.ncC||'',notas:S.ncN||'',
     estado:'Stand By',lineas:S.ncL.length,
     totalFob:total,totalUsd:0,
-    detalle:S.ncL.map(l=>({...l}))
+    detalle:S.ncL.map(function(l){return Object.assign({},l);})
   };
   S.cots.unshift(cot);
   closeModal();saveData();renderSidebar();renderPage();
@@ -2001,7 +2000,7 @@ const BL_ETAPA_COLORS = {
 };
 
 function nextBLId(){
-  return S.bls.length > 0 ? Math.max(...S.bls.map(b=>b.id))+1 : 1;
+  if(S.bls.length===0) return 1; var maxId=0; S.bls.forEach(function(b){if(b.id>maxId)maxId=b.id;}); return maxId+1;
 }
 
 function blTrackingURL(naviera, blNum){
@@ -2636,7 +2635,7 @@ function saveBL(){
   var totalPeso = +(document.getElementById('bl-peso')?.value||0);
 
   // Build conts array from unique container numbers in lines
-  var contNums = [...new Set(finalLines.map(function(l){return l.cont;}).filter(Boolean))];
+  var _cnset={}; finalLines.forEach(function(l){if(l.cont)_cnset[l.cont]=1;}); var contNums=Object.keys(_cnset);
   var conts = contNums.map(function(num,i){
     // Distribute CBM and peso proportionally — for now assign to first cont, rest 0
     return {num:i+1, numFisico:num, tipo:"40'HQ", cbm:i===0?totalCBM:0, peso:i===0?totalPeso:0};
