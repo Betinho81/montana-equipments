@@ -572,6 +572,7 @@ let S={
   user:null, page:'cots',
   cifSel:null, cifConts:[], cifTRM:7.25, cifCOP:4100,
   cifFirmes:{},  // {ocId: {fecha, usuario, datos}}
+  prodVista:'grid',
   bls:[],  // Bill of Lading records
   blSearch:'', blEtapa:'',
   cots:null, prods:null,
@@ -821,12 +822,21 @@ function pageCots(){
 }
 
 function pageProds(){
-  var _gset={}; S.prods.forEach(function(p){if(p.g)_gset[p.g]=1;}); var grupos=Object.keys(_gset).sort();
-  var fil=S.prods.filter(function(p){
+  if(!isAdmin()){
+    return '<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;color:var(--bd);"></i><div style="font-size:14px;font-weight:500;">Acceso restringido</div><div style="font-size:12px;margin-top:4px;">Solo el administrador puede ver el catálogo de productos</div></div>';
+  }
+  var prodsOrdenados = S.prods.slice().sort(function(a,b){
+    var sa=isNaN(+a.sku)?a.sku:(+a.sku);
+    var sb=isNaN(+b.sku)?b.sku:(+b.sku);
+    if(sa<sb) return -1; if(sa>sb) return 1; return 0;
+  });
+  var _gset={}; prodsOrdenados.forEach(function(p){if(p.g)_gset[p.g]=1;}); var grupos=Object.keys(_gset).sort();
+  var fil=prodsOrdenados.filter(function(p){
     if(S.pS&&!(p.sku+' '+p.n+' '+(p.ne||'')).toLowerCase().includes(S.pS.toLowerCase()))return false;
     if(S.pG&&p.g!==S.pG)return false;
     return true;
   });
+  var vistaLista = S.prodVista==='lista';
   var adminUser = isAdmin();
   var icons={Equipos:'ti-engine',Accesorios:'ti-plug',Almacenamiento:'ti-box','Construcción':'ti-building',Agricultura:'ti-plant',Herramientas:'ti-tools',Seguridad:'ti-shield',default:'ti-package'};
 
@@ -836,7 +846,12 @@ function pageProds(){
   h += '<div class="page-header">';
   h += '<div><div class="page-title" style="display:flex;align-items:center;gap:10px;"><i class="ti ti-book-2" style="color:var(--d);font-size:22px;"></i>Catálogo de Productos</div>';
   h += '<div class="page-sub">'+fil.length+' producto(s) · '+grupos.length+' grupo(s)</div></div>';
-  h += '<div class="page-actions">';
+  h += '<div class="page-actions" style="display:flex;gap:8px;align-items:center;">';
+  // Toggle vista
+  h += '<div style="display:flex;border:1px solid var(--bo);border-radius:8px;overflow:hidden;">';
+  h += '<button class="btn btn-sm" data-action="prod-vista" data-v="grid" style="border-radius:0;border:none;background:'+(vistaLista?'transparent':'var(--v)')+';color:'+(vistaLista?'var(--tl)':'var(--d)')+';" title="Vista grid"><i class="ti ti-layout-grid"></i></button>';
+  h += '<button class="btn btn-sm" data-action="prod-vista" data-v="lista" style="border-radius:0;border:none;border-left:1px solid var(--bo);background:'+(vistaLista?'var(--v)':'transparent')+';color:'+(vistaLista?'var(--d)':'var(--tl)')+';" title="Vista lista"><i class="ti ti-list"></i></button>';
+  h += '</div>';
   if(adminUser) h += '<button class="btn btn-gold btn-sm" id="btn-new-prod"><i class="ti ti-plus"></i>Nuevo Producto</button>';
   h += '</div></div>';
 
@@ -860,7 +875,34 @@ function pageProds(){
     return h;
   }
 
-  // ── Grid de productos ──
+  // ── Vista Lista ──
+  if(vistaLista){
+    h += '<div class="card">';
+    h += '<div class="table-wrap"><table><thead><tr>';
+    h += '<th style="width:60px;">Foto</th><th>SKU</th><th>Nombre</th><th>Grupo</th>';
+    h += '<th>Descripción</th><th style="text-align:right;">Precio RMB</th><th>Subpartida</th><th>Acciones</th>';
+    h += '</tr></thead><tbody>';
+    fil.forEach(function(p){
+      var fotoSrc = p.fotoUrl||(p.fotos&&p.fotos.length?p.fotos[0]:'');
+      var descCorta = (p.d||'').length>60?(p.d||'').substring(0,60)+'…':(p.d||'');
+      h += '<tr>';
+      h += '<td>'+(fotoSrc?'<img src="'+fotoSrc+'" style="width:44px;height:44px;object-fit:cover;border-radius:6px;">':'<div style="width:44px;height:44px;background:var(--v);border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-package" style="color:var(--d);font-size:18px;"></i></div>')+'</td>';
+      h += '<td><span style="background:var(--v);color:var(--d);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">'+p.sku+'</span></td>';
+      h += '<td style="font-weight:600;color:var(--v);">'+p.n+'</td>';
+      h += '<td><span class="badge badge-gold">'+p.g+'</span></td>';
+      h += '<td style="font-size:11.5px;color:var(--tl);">'+descCorta+'</td>';
+      h += '<td style="text-align:right;font-weight:600;">'+( p.rmb?'¥'+p.rmb:'—')+'</td>';
+      h += '<td style="font-size:11px;color:var(--tl);">'+(p.sub||'—')+'</td>';
+      h += '<td><div style="display:flex;gap:4px;">';
+      h += '<button class="btn btn-out btn-sm btn-edit-prod" data-id="'+p.id+'" style="padding:4px 8px;"><i class="ti ti-edit"></i></button>';
+      h += '<button class="btn btn-danger btn-sm btn-del-prod" data-id="'+p.id+'" style="padding:4px 8px;"><i class="ti ti-trash"></i></button>';
+      h += '</div></td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  // ── Vista Grid ──
   h += '<div class="prod-grid">';
   fil.forEach(function(p){
     var icon = icons[p.g]||icons.default;
@@ -2999,6 +3041,7 @@ document.addEventListener('click', function(e){
   else if(action==='clear-bl-filter'){ S.blSearch='';S.blEtapa='';renderPage(); }
   else if(action==='clear-prod-filter'){ S.pS='';S.pG='';renderPage(); }
   else if(action==='prod-grupo-btn'){ S.pG=el.dataset.g;renderPage(); }
+  else if(action==='prod-vista'){ S.prodVista=el.dataset.v;renderPage(); }
   else if(action==='ver-prod'){
     var p=S.prods.find(function(x){return x.id===id;});
     if(p) openModal(modalProd(p));
