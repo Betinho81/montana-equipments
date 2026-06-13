@@ -2144,7 +2144,11 @@ function pageBL(){
   h += '<div><div style="font-size:17px;font-weight:600;color:var(--be);">BL Management</div>';
   h += '<div style="font-size:10px;color:var(--d);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;">Bills of Lading &middot; Shipment Tracking</div></div></div>';
   if(isAdm){
+    h += '<div style="display:flex;gap:8px;">';
     h += '<button class="btn btn-gold btn-sm" data-action="new-bl"><i class="ti ti-plus"></i>+ New BL</button>';
+    h += '<button class="btn btn-out btn-sm" data-action="import-bls" title="Importar BLs desde Excel"><i class="ti ti-file-spreadsheet"></i>Importar Excel</button>';
+    h += '<input type="file" id="bl-import-file" accept=".xlsx,.xls,.csv" style="display:none;">';
+    h += '</div>';
   }
   h += '</div>';
 
@@ -3104,6 +3108,7 @@ document.addEventListener('click', function(e){
   console.log('DELEGATION CLICK:', action, id);
 
   if(action==='new-bl'){ openModalBL(null); }
+  else if(action==='import-bls'){ importBLsFromExcel(); }
   else if(action==='ver-bl'){ verBL(id); }
   else if(action==='edit-bl'){ editEtapaBL(id); }
   else if(action==='save-bl'){ saveBL(); }
@@ -3210,6 +3215,200 @@ function importBackup(){
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ─── IMPORTAR BLs DESDE EXCEL ───
+function importBLsFromExcel(){
+  var input = document.getElementById('bl-import-file');
+  if(!input){ toast('Error: input no encontrado','error'); return; }
+  input.onchange = function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    // Usar SheetJS (XLSX) para leer el archivo
+    var script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.onload = function(){
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        try{
+          var wb = XLSX.read(ev.target.result, {type:'binary'});
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+          processBLRows(rows);
+        }catch(err){
+          toast('Error al leer Excel: '+err.message,'error');
+        }
+      };
+      reader.readAsBinaryString(file);
+    };
+    if(typeof XLSX !== 'undefined'){
+      // Ya cargado
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        try{
+          var wb = XLSX.read(ev.target.result, {type:'binary'});
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+          processBLRows(rows);
+        }catch(err){
+          toast('Error al leer Excel: '+err.message,'error');
+        }
+      };
+      reader.readAsBinaryString(file);
+    } else {
+      document.head.appendChild(script);
+    }
+    input.value='';
+  };
+  input.click();
+}
+
+function processBLRows(rows){
+  if(!rows||rows.length===0){ toast('No se encontraron filas en el Excel','error'); return; }
+
+  // Agrupar filas por BL Number
+  var blMap = {};
+  rows.forEach(function(row){
+    var blNum = (row['BL Number']||row['BL_Number']||row['bl number']||'').toString().trim();
+    var ocNum = (row['OC No']||row['OC_No']||'').toString().trim();
+    var contNum = (row['CONTAINER NUMBER']||row['Container Number']||'').toString().trim();
+    var contInterno = (row['Container']||'').toString().trim();
+    var producto = (row['PRODUCT NAME']||row['Product Name']||'').toString().trim();
+    var qty = +(row['Total QTY']||0);
+    var vessel = (row['船名 VESSEL']||row['VESSEL']||'').toString().trim();
+    var voyage = (row['航次  VOYAGE NO']||row['VOYAGE NO']||'').toString().trim();
+    var bookingRef = (row['提单号 BOOKING REF.']||row['BOOKING REF']||'').toString().trim();
+    var etd = (row['ETD']||'').toString().trim();
+    var eta = (row['ETA']||'').toString().trim();
+    var origen = (row['FACTORY ORIGIN']||'').toString().trim();
+    var cbm = +(row['TOTAL CBM']||0);
+    var peso = +(row['TOTAL WEIGHT']||0);
+    var website = (row['WEB SITE']||'').toString().trim();
+
+    if(!blNum||!ocNum||ocNum==='OC No') return; // saltar encabezados y vacíos
+
+    // Detectar naviera por website
+    var naviera = '';
+    if(website.includes('msc')) naviera='MSC';
+    else if(website.includes('hapag')) naviera='Hapag-Lloyd';
+    else if(website.includes('maersk')) naviera='Maersk';
+    else if(website.includes('cma-cgm')||website.includes('cma_cgm')) naviera='CMA CGM';
+    else if(website.includes('evergreen')) naviera='Evergreen';
+    else if(website.includes('wanhai')) naviera='Wan Hai';
+    else if(website.includes('yangming')) naviera='Yang Ming';
+    else if(website.includes('oocl')) naviera='COSCO';
+    else if(website.includes('hmm21')) naviera='Hapag-Lloyd';
+    else if(website.includes('pilship')) naviera='PIL';
+
+    // Convertir fecha Excel (número serial) a ISO
+    function excelDateToISO(v){
+      if(!v) return '';
+      if(typeof v === 'string' && v.includes('-')) return v;
+      var n = +v;
+      if(isNaN(n)||n<1000) return v.toString();
+      var d = new Date((n - 25569)*86400*1000);
+      return d.toISOString().split('T')[0];
+    }
+
+    if(!blMap[blNum]){
+      blMap[blNum] = {
+        blNum: blNum,
+        ocNum: ocNum,
+        naviera: naviera,
+        vessel: vessel,
+        voyageNo: voyage,
+        bookingRef: bookingRef,
+        etd: excelDateToISO(etd),
+        eta: excelDateToISO(eta),
+        origen: origen,
+        trackUrl: website,
+        totalCBM: cbm,
+        totalPeso: peso,
+        lines: [],
+        conts: [],
+        etapa: 'Done',
+      };
+    }
+
+    // Agregar línea si hay producto
+    if(producto && contNum){
+      // Buscar lineIdx en la OC
+      var oc = S.cots.find(function(c){return c.oc===ocNum;});
+      var lineIdx = -1;
+      if(oc&&oc.detalle){
+        oc.detalle.forEach(function(l,i){
+          if(lineIdx===-1 && (l.p||l.producto||'').toLowerCase()===producto.toLowerCase()){
+            lineIdx=i;
+          }
+        });
+        // Si no encontró por nombre exacto, buscar por SKU o parcial
+        if(lineIdx===-1){
+          var sku = (row['SKU']||row['ITEM']||'').toString().trim();
+          oc.detalle.forEach(function(l,i){
+            if(lineIdx===-1 && (l.sku||l.s||'')===sku) lineIdx=i;
+          });
+        }
+      }
+      // Agregar línea
+      blMap[blNum].lines.push({
+        lineIdx: lineIdx>=0?lineIdx:0,
+        sku: (row['SKU']||row['ITEM']||'').toString().trim(),
+        producto: producto,
+        qtyOrig: qty,
+        qtySel: qty,
+        cont: contNum,
+        isSplit: false,
+      });
+      // Agregar contenedor si no existe
+      var contExists = blMap[blNum].conts.some(function(c){return c.numFisico===contNum;});
+      if(!contExists){
+        blMap[blNum].conts.push({
+          num: blMap[blNum].conts.length+1,
+          numFisico: contNum,
+          tipo: "40'HQ",
+          cbm: cbm,
+          peso: peso,
+        });
+      }
+    }
+  });
+
+  // Convertir mapa a array y asignar ocId
+  var newBLs = [];
+  var skipped = [];
+  Object.keys(blMap).forEach(function(blNum){
+    var bl = blMap[blNum];
+    var oc = S.cots.find(function(c){return c.oc===bl.ocNum;});
+    if(!oc){ skipped.push(blNum+' (OC '+bl.ocNum+' no encontrada)'); return; }
+    // Verificar si ya existe
+    var exists = S.bls.find(function(b){return b.blNum===blNum;});
+    if(exists){ skipped.push(blNum+' (ya existe)'); return; }
+    bl.id = nextBLId() + newBLs.length;
+    bl.ocId = oc.id;
+    bl.fechaCreacion = new Date().toISOString().split('T')[0];
+    bl.creadoPor = S.user.n;
+    delete bl.ocNum;
+    newBLs.push(bl);
+  });
+
+  if(newBLs.length===0){
+    var msg = 'No se importaron BLs.';
+    if(skipped.length>0) msg += ' Omitidos: '+skipped.join(', ');
+    toast(msg,'warn');
+    return;
+  }
+
+  var msg = '¿Importar '+newBLs.length+' BL(s)?\n\n';
+  newBLs.forEach(function(bl){ msg += '• '+bl.blNum+' ('+bl.ocId+')\n'; });
+  if(skipped.length>0) msg += '\nOmitidos: '+skipped.join(', ');
+
+  if(!confirm(msg)) return;
+
+  newBLs.forEach(function(bl){ S.bls.push(bl); });
+  saveData();
+  renderSidebar();
+  renderPage();
+  toast(newBLs.length+' BL(s) importados ✓');
 }
 
 // ─── INIT ───
