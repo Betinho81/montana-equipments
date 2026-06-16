@@ -2125,7 +2125,7 @@ function blTrackingURL(naviera, blNum){
 }
 
 function pageBL(){
-  var isAdm = isAdmin();
+  var isAdm = isAdmin() || isAuxBL() || isProveedor();
 
   // Filter OCs with at least one unassigned line
   var ocs_avail = S.cots.filter(function(c){
@@ -2247,7 +2247,7 @@ function pageBL(){
     h += '<td><div style="display:flex;gap:4px;">';
     h += '<button class="btn btn-dark btn-sm" data-action="ver-bl" data-id="'+b.id+'" title="View"><i class="ti ti-eye"></i></button>';
     if(b.pdfUrl) h += '<a href="'+b.pdfUrl+'" target="_blank" class="btn btn-pdf btn-sm"><i class="ti ti-file-type-pdf"></i></a>';
-    if(isAdm) h += '<button class="btn btn-sm" data-action="edit-bl" data-id="'+b.id+'" style="background:#fff8e1;color:#c77700;border:1px solid #c77700;" title="Edit"><i class="ti ti-edit"></i></button>';
+    if(isAdm||isAuxBL()||isProveedor()) h += '<button class="btn btn-sm" data-action="edit-bl" data-id="'+b.id+'" style="background:#fff8e1;color:#c77700;border:1px solid #c77700;" title="Edit"><i class="ti ti-edit"></i></button>';
     h += '</div></td></tr>';
   });
 
