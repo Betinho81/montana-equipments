@@ -461,6 +461,7 @@ const USERS=[
   {e:'ailyliu@pianto.cn',p:'alyson123',n:'Aily',r:'proveedor'},
   {e:'bodega@montana.com',p:'bodega123',n:'Op. Bodega',r:'bodega'},
   {e:'rafael_correa_rueda@hotmail.com',p:'Anto123',n:'Rafael Correa',r:'observador'},
+  {e:'maria_victoria_trujillo@hotmail.com',p:'optica123',n:'Maria Victoria',r:'aux_bl'},
 ];
 
 const D027=[
@@ -669,6 +670,9 @@ function loadData(){
 const fN=(n,d=0)=>Number(n||0).toFixed(d).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const isReadOnly=()=>S.user&&(S.user.r==='observador'||S.user.r==='proveedor'||S.user.r==='bodega');
 const isAdmin=()=>S.user&&S.user.r==='admin';
+const isProveedor=()=>S.user&&S.user.r==='proveedor';
+const isAuxBL=()=>S.user&&S.user.r==='aux_bl';
+const soloLectura=()=>!isAdmin()&&!isProveedor()&&!isAuxBL();
 const fR=n=>'¥'+fN(n,0);
 const fU=n=>'$'+fN(n,2);
 const todayDisp=()=>new Date().toLocaleDateString('es-CO',{year:'numeric',month:'2-digit',day:'2-digit'});
@@ -760,11 +764,11 @@ function renderSidebar(){
   const r=S.user.r;
   let html='';
   html+=`<span class="sb-section">Importación</span>`;
-  html+=`<div class="sb-item ${S.page==='cots'?'active':''}" data-p="cots"><i class="ti ti-calculator"></i>Cotizaciones<span class="sb-badge">${S.cots.length}</span></div>`;
-  html+=`<div class="sb-item ${S.page==='cif'?'active':''}" data-p="cif"><i class="ti ti-coin"></i>Calculadora CIF${S.user&&S.user.r!=='admin'?'<i class="ti ti-eye" style="margin-left:auto;font-size:12px;opacity:.5;" title="Solo lectura"></i>':'<span class="sb-badge" style="background:rgba(201,162,39,.2);color:var(--d);">CIF</span>'}</div>`;
+  if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='cots'?'active':''}" data-p="cots"><i class="ti ti-calculator"></i>Cotizaciones<span class="sb-badge">${S.cots.length}</span></div>`;
+  if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='cif'?'active':''}" data-p="cif"><i class="ti ti-coin"></i>Calculadora CIF${isAdmin()?'<span class="sb-badge" style="background:rgba(201,162,39,.2);color:var(--d);">CIF</span>':'<i class="ti ti-eye" style="margin-left:auto;font-size:12px;opacity:.5;" title="Solo lectura"></i>'}</div>`;
   html+=`<div class="sb-item ${S.page==='bl'?'active':''}" data-p="bl"><i class="ti ti-ship"></i>BL Management<span class="sb-badge">${S.bls.length}</span></div>`;
   html+=`<div class="sb-div"></div><span class="sb-section">Catálogo</span>`;
-  html+=`<div class="sb-item ${S.page==='prods'?'active':''}" data-p="prods"><i class="ti ti-package"></i>Productos<span class="sb-badge">${S.prods.length}</span></div>`;
+  if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='prods'?'active':''}" data-p="prods"><i class="ti ti-package"></i>Productos<span class="sb-badge">${S.prods.length}</span></div>`;
   document.getElementById('sidebar').innerHTML=html;
   document.querySelectorAll('.sb-item[data-p]').forEach(el=>{
     el.onclick=()=>{S.page=el.dataset.p;renderSidebar();renderPage();};
@@ -778,9 +782,9 @@ function renderPage(){
   window._r = true;
   try{
     const ma=document.getElementById('main-area');
-    if(S.page==='cots') ma.innerHTML=pageCots();
-    else if(S.page==='prods') ma.innerHTML=pageProds();
-    else if(S.page==='cif') ma.innerHTML=pageCIF();
+    if(S.page==='cots') ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageCots();
+    else if(S.page==='prods') ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageProds();
+    else if(S.page==='cif') ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageCIF();
     else if(S.page==='bl'){ma.innerHTML=pageBL();bindBL();}
     bindPage();
   } finally {
@@ -890,8 +894,8 @@ function pageCots(){
 }
 
 function pageProds(){
-  if(!isAdmin()){
-    return '<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;color:var(--bd);"></i><div style="font-size:14px;font-weight:500;">Acceso restringido</div><div style="font-size:12px;margin-top:4px;">Solo el administrador puede ver el catálogo de productos</div></div>';
+  if(isAuxBL()){
+    return '<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;color:var(--bd);"></i><div style="font-size:14px;font-weight:500;">Acceso restringido</div></div>';
   }
   var prodsOrdenados = S.prods.slice().sort(function(a,b){
     var sa=isNaN(+a.sku)?a.sku:(+a.sku);
@@ -905,7 +909,7 @@ function pageProds(){
     return true;
   });
   var vistaLista = S.prodVista==='lista';
-  var adminUser = isAdmin();
+  var adminUser = isAdmin(); // proveedor ve pero no edita
   var icons={Equipos:'ti-engine',Accesorios:'ti-plug',Almacenamiento:'ti-box','Construcción':'ti-building',Agricultura:'ti-plant',Herramientas:'ti-tools',Seguridad:'ti-shield',default:'ti-package'};
 
   var h = '';
