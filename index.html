@@ -341,6 +341,7 @@ tr:last-child td{border-bottom:none;}
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
   import { getFirestore, doc, setDoc, getDoc, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyCbJZogi8rKLRDHPy3KQRFaKBEm3HrSuGM",
@@ -353,8 +354,36 @@ tr:last-child td{border-bottom:none;}
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const storage = getStorage(app);
   window._db = db;
+  window._storage = storage;
   window._fbReady = true;
+
+  // ── Subir PDF a Firebase Storage ──
+  window.fbUploadPDF = async function(file, blNum){
+    try{
+      const path = 'bls/'+blNum+'/'+file.name;
+      const storageRef = ref(storage, path);
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      return {url: url, nombre: file.name, path: path};
+    }catch(e){
+      console.error('fbUploadPDF error:', e);
+      return null;
+    }
+  };
+
+  // ── Eliminar PDF de Firebase Storage ──
+  window.fbDeletePDF = async function(path){
+    try{
+      const storageRef = ref(storage, path);
+      await deleteObject(storageRef);
+      return true;
+    }catch(e){
+      console.error('fbDeletePDF error:', e);
+      return false;
+    }
+  };
 
   // ── Guardar datos en Firestore ──
   window.fbSave = async function(key, data){
@@ -2871,8 +2900,30 @@ function verBL(id){
   h+='</div>';
   h+='</div>';
 
+  // ── Sección PDFs ──
+  var pdfs = b.pdfs || [];
+  h+='<div style="padding:16px;border-top:1px solid var(--bo);">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+  h+='<div style="font-size:12px;font-weight:600;color:var(--v);text-transform:uppercase;letter-spacing:.5px;"><i class="ti ti-files" style="margin-right:6px;"></i>Documentos PDF</div>';
+  h+='<button class="btn btn-gold btn-sm" onclick="uploadPDFForBL('+b.id+')" style="font-size:11px;"><i class="ti ti-upload"></i>Subir PDF</button>';
+  h+='</div>';
+  if(pdfs.length===0){
+    h+='<div style="text-align:center;padding:16px;color:var(--tl);font-size:12px;background:#f9f7f4;border-radius:8px;border:1px dashed var(--bd);">Sin documentos adjuntos</div>';
+  } else {
+    pdfs.forEach(function(pdf,i){
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:8px;background:#f9f7f4;border-radius:8px;margin-bottom:6px;border:1px solid var(--bo);">';
+      h+='<i class="ti ti-file-type-pdf" style="color:#e53935;font-size:20px;flex-shrink:0;"></i>';
+      h+='<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pdf.nombre+'</div>';
+      h+='<div style="font-size:10px;color:var(--tl);">'+(pdf.fecha||'')+'</div></div>';
+      h+='<a href="'+pdf.url+'" target="_blank" class="btn btn-out btn-sm" style="padding:4px 8px;font-size:11px;"><i class="ti ti-eye"></i>Ver</a>';
+      h+='<button class="btn btn-danger btn-sm" onclick="deletePDFFromBL('+b.id+','+i+')" style="padding:4px 8px;"><i class="ti ti-trash"></i></button>';
+      h+='</div>';
+    });
+  }
+  h+='</div>';
+
   h+='<div class="modal-foot">';
-  if(isAdmin()){
+  if(isAdmin()||isAuxBL()||isProveedor()){
     h+='<button class="btn btn-sm" data-action="edit-bl" data-id="'+b.id+'" style="background:#fff8e1;color:#c77700;border:1px solid #c77700;margin-right:auto;"><i class="ti ti-edit"></i>Edit</button>';
   }
   h+='<button class="btn btn-out btn-sm btn-modal-close">Close</button>';
@@ -3413,6 +3464,49 @@ function processBLRows(rows){
   renderSidebar();
   renderPage();
   toast(newBLs.length+' BL(s) importados ✓');
+}
+
+// ─── PDF MANAGEMENT ───
+function uploadPDFForBL(blId){
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf';
+  input.onchange = async function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    if(file.size > 10*1024*1024){ toast('El PDF no puede superar 10MB','error'); return; }
+    var b = S.bls.find(function(x){return x.id===blId;});
+    if(!b){ toast('BL no encontrado','error'); return; }
+    toast('Subiendo PDF...');
+    if(!window.fbUploadPDF){ toast('Firebase Storage no disponible','error'); return; }
+    var result = await window.fbUploadPDF(file, b.blNum);
+    if(!result){ toast('Error al subir el PDF','error'); return; }
+    if(!b.pdfs) b.pdfs = [];
+    b.pdfs.push({
+      nombre: result.nombre,
+      url: result.url,
+      path: result.path,
+      fecha: new Date().toLocaleDateString('es-CO'),
+      subidoPor: S.user.n,
+    });
+    saveData();
+    toast('PDF subido correctamente ✓');
+    // Reabrir modal con datos actualizados
+    setTimeout(function(){ verBL(blId); }, 500);
+  };
+  input.click();
+}
+
+function deletePDFFromBL(blId, pdfIdx){
+  var b = S.bls.find(function(x){return x.id===blId;});
+  if(!b||!b.pdfs||!b.pdfs[pdfIdx]) return;
+  var pdf = b.pdfs[pdfIdx];
+  if(!confirm('¿Eliminar el documento "'+pdf.nombre+'"?')) return;
+  if(window.fbDeletePDF && pdf.path) window.fbDeletePDF(pdf.path);
+  b.pdfs.splice(pdfIdx, 1);
+  saveData();
+  toast('Documento eliminado ✓');
+  setTimeout(function(){ verBL(blId); }, 300);
 }
 
 // ─── INIT ───
