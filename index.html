@@ -1594,7 +1594,7 @@ function pageCIF(){
     html += '<div style="overflow-x:auto;"><table><thead><tr>';
     html += '<th>Cont. #</th><th>No. Físico (Naviera)</th><th style="text-align:right">Ocean Fee (RMB)</th><th style="text-align:right">Container (USD)</th>';
     html += '<th style="text-align:right">Local Charge (RMB)</th><th style="text-align:right">Insurance (RMB)</th>';
-    html += '<th style="text-align:right">Truck Fee (RMB)</th><th style="text-align:right">Total Flete RMB</th><th></th>';
+    html += '<th style="text-align:right">Truck Fee (RMB)</th><th style="text-align:right">Total Flete RMB</th><th>Líneas</th><th></th>';
     html += '</tr></thead><tbody>';
     S.cifConts.forEach(function(c,i){
       var tf = (c.ocean||0)+(c.local||0)+(c.insurance||0)+(c.truck||0); // contUsd informational
@@ -1613,6 +1613,27 @@ function pageCIF(){
       html += '<td>'+inp('insurance',c.insurance||0)+'</td>';
       html += '<td>'+inp('truck',c.truck||0)+'</td>';
       html += '<td style="text-align:right;font-weight:600;color:var(--v);">'+fR(tf)+'</td>';
+      // ── Columna Líneas ──
+      var selDet2 = sel && (sel.detalle||[]).filter(function(l){return (l.p||l.producto)&&((l.qty||0)>0||(l.fob||0)>0||(l.rmb||0)>0);});
+      if(selDet2 && selDet2.length > 0){
+        html += '<td style="min-width:170px;max-width:220px;vertical-align:top;padding:6px 8px;">';
+        if(canEdit){
+          html += '<div style="display:flex;flex-direction:column;gap:2px;max-height:110px;overflow-y:auto;">';
+          selDet2.forEach(function(l2, li){
+            var chk2 = c.lineIdxs && c.lineIdxs.indexOf(li) !== -1;
+            var lbl2 = (l2.sku||l2.s||('L'+li)) + ' ' + (l2.p||l2.producto||'').substring(0,16);
+            html += '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--v);cursor:pointer;white-space:nowrap;" title="'+(l2.p||l2.producto||'')+'">';
+            html += '<input type="checkbox"'+(chk2?' checked':'')+' style="accent-color:var(--d);width:12px;height:12px;flex-shrink:0;"';
+            html += ' onchange="toggleCifContLine('+i+','+li+',this.checked)">';
+            html += '<span style="overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+lbl2+'</span></label>';
+          });
+          html += '</div>';
+        } else {
+          var asgn = (c.lineIdxs||[]).map(function(li){ var l2=selDet2[li]; return l2?(l2.sku||l2.s||('L'+li)):'?'; });
+          html += '<div style="font-size:10px;color:var(--v);">'+(asgn.length?asgn.join(', '):'<span style=\'color:var(--tl);font-style:italic;\'>Sin asignar</span>')+'</div>';
+        }
+        html += '</td>';
+      } else { html += '<td></td>'; }
       html += '<td>'+(canEdit?'<button class="btn btn-danger btn-sm" data-action="del-cif-cont" data-id="'+i+'"><i class="ti ti-trash"></i></button>':'')+'</td>';
       html += '</tr>';
     });
@@ -1640,86 +1661,60 @@ function pageCIF(){
   return html;
 }
 
-// ─── HELPER: Flete por línea usando BL → número físico contenedor ───
+// ─── HELPER: Flete por línea usando cifConts.lineIdxs (asignación directa Paso 2) ───
 function getFleteParaLinea(oc, lineIdx, totalFlete, pct){
   var detalle = (oc.detalle||[]).filter(function(l){
     return (l.p||l.producto)&&((l.qty||0)>0||(l.fob||0)>0||(l.rmb||0)>0);
   });
   var fobLinea = (detalle[lineIdx]||{}).fob || 0;
 
-  // Funcion: dado un numFisico de contenedor, calcular el flete proporcional
-  // entre TODAS las lineas que van en ese mismo contenedor (segun BLs)
-  function fleteProporcionContEnBLs(contNumFisico, blsOC){
-    // Encontrar todas las lineIdx asignadas a este contenedor en todos los BLs de la OC
+  // ── PRIORIDAD 1: cifConts con lineIdxs asignados (Paso 2 directo) ──
+  var contAsignado = S.cifConts.find(function(c){
+    return c.lineIdxs && c.lineIdxs.indexOf(lineIdx) !== -1;
+  });
+  if(contAsignado){
+    var fleteTotalCont = (+(contAsignado.ocean||0))+(+(contAsignado.local||0))+(+(contAsignado.insurance||0))+(+(contAsignado.truck||0));
+    var fobTotalCont = (contAsignado.lineIdxs||[]).reduce(function(s,idx){
+      var l = detalle[idx];
+      return s + (l ? (+(l.fob||0)||((+(l.qty||0))*(+(l.rmb||0)))) : 0);
+    }, 0);
+    var fleteProp = fobTotalCont > 0 ? fleteTotalCont * (fobLinea / fobTotalCont) : 0;
+    var label = contAsignado.numFisico || ('Cont.'+(contAsignado.num||''));
+    return {flete: fleteProp, contNum: label, modo: 'directo'};
+  }
+
+  // ── PRIORIDAD 2: BLs registrados ──
+  var blsOC = S.bls.filter(function(b){ return b.ocId===oc.id; });
+  function fleteProporcionContEnBLs(contNumFisico){
     var lineasEnCont = [];
     blsOC.forEach(function(bl){
       (bl.lines||[]).forEach(function(bll){
-        if(bll.cont&&bll.cont.trim().toUpperCase()===contNumFisico.trim().toUpperCase()){
+        if(bll.cont && bll.cont.trim().toUpperCase()===contNumFisico.trim().toUpperCase())
           lineasEnCont.push(bll.lineIdx);
-        }
       });
     });
     if(lineasEnCont.length===0) return null;
-    // Flete total del contenedor
     var contMatch = S.cifConts.find(function(c){
-      return c.numFisico&&c.numFisico.trim().toUpperCase()===contNumFisico.trim().toUpperCase();
+      return c.numFisico && c.numFisico.trim().toUpperCase()===contNumFisico.trim().toUpperCase();
     });
-    // Tambien buscar en cifFirmes
-    if(!contMatch){
-      var firme = S.cifFirmes&&S.cifFirmes[oc.id];
-      if(firme&&firme.conts){
-        contMatch = firme.conts.find(function(c){
-          return c.numFisico&&c.numFisico.trim().toUpperCase()===contNumFisico.trim().toUpperCase();
-        });
-      }
-    }
+    if(!contMatch){ var firme=S.cifFirmes&&S.cifFirmes[oc.id]; if(firme&&firme.conts) contMatch=firme.conts.find(function(c){return c.numFisico&&c.numFisico.trim().toUpperCase()===contNumFisico.trim().toUpperCase();}); }
     if(!contMatch) return null;
-    var fleteTotalCont = (+(contMatch.ocean||0))+(+(contMatch.local||0))+(+(contMatch.insurance||0))+(+(contMatch.truck||0));
-    // FOB total de todas las lineas en este contenedor
-    var fobTotalCont = lineasEnCont.reduce(function(s,idx){
-      var l = detalle[idx];
-      return s + (l ? (l.fob||(l.qty*(l.rmb||0))||0) : 0);
-    }, 0);
-    if(fobTotalCont<=0) return {flete:fleteTotalCont/lineasEnCont.length, contNum:contNumFisico, modo:'directo'};
-    // Flete proporcional para esta linea
-    var fleteProp = fobLinea>0 ? fleteTotalCont * (fobLinea/fobTotalCont) : 0;
-    return {flete:fleteProp, contNum:contNumFisico, modo:'directo'};
+    var fleteTotalCont=(+(contMatch.ocean||0))+(+(contMatch.local||0))+(+(contMatch.insurance||0))+(+(contMatch.truck||0));
+    var fobTotalCont=lineasEnCont.reduce(function(s,idx){var l=detalle[idx];return s+(l?(+(l.fob||0)||(+(l.qty||0))*(+(l.rmb||0))):0);},0);
+    if(fobTotalCont<=0) return {flete:fleteTotalCont/lineasEnCont.length,contNum:contNumFisico,modo:'directo'};
+    return {flete:fleteTotalCont*(fobLinea/fobTotalCont),contNum:contNumFisico,modo:'directo'};
   }
-
-  // 1. Intentar por BL
-  var blsOC = S.bls.filter(function(b){ return b.ocId===oc.id; });
   for(var bi=0;bi<blsOC.length;bi++){
     var bl=blsOC[bi];
-    var blLine=(bl.lines||[]).find(function(l){ return l.lineIdx===lineIdx; });
+    var blLine=(bl.lines||[]).find(function(l){return l.lineIdx===lineIdx;});
     if(blLine&&blLine.cont&&blLine.cont.trim()){
-      var res = fleteProporcionContEnBLs(blLine.cont.trim(), blsOC);
+      var res=fleteProporcionContEnBLs(blLine.cont.trim());
       if(res) return res;
     }
   }
-  // 2. Si hay BL con linea asignada pero sin match de contenedor → prorrateo
-  var blLineFound = false;
-  for(var bi2=0;bi2<blsOC.length;bi2++){
-    if((blsOC[bi2].lines||[]).find(function(l){return l.lineIdx===lineIdx;})){
-      blLineFound=true; break;
-    }
-  }
-  if(blLineFound) return {flete:totalFlete*pct, contNum:null, modo:'prorrateo'};
 
-  // 3. Sin BL: asignar por indice solo si no hay BLs registrados
-  if(blsOC.length===0){
-    var contsReales = S.cifConts.filter(function(c){
-      return (c.ocean||0)+(c.local||0)+(c.insurance||0)+(c.truck||0) > 0;
-    });
-    if(contsReales.length > 0){
-      var contIdx = Math.min(lineIdx, contsReales.length - 1);
-      var contAsg = contsReales[contIdx];
-      var fleteIdx = (contAsg.ocean||0)+(contAsg.local||0)+(contAsg.insurance||0)+(contAsg.truck||0);
-      var label = contAsg.numFisico || ('Cont.'+(contIdx+1));
-      return {flete:fleteIdx, contNum:label, modo:'indice'};
-    }
-  }
-  // 4. Ultimo fallback
-  return {flete:totalFlete*pct, contNum:null, modo:'prorrateo'};
+  // ── PRIORIDAD 3: prorrateo global fallback ──
+  return {flete: totalFlete * pct, contNum: null, modo: 'prorrateo'};
 }
 
 function calcCIF(oc){
@@ -1997,7 +1992,7 @@ function onCifOC(){
       if(firme.trm) S.cifTRM = firme.trm;
       if(firme.cop) S.cifCOP = firme.cop;
     } else if(oc && OC_CONTS[oc.oc]){
-      S.cifConts = OC_CONTS[oc.oc].map(function(c){return Object.assign({},c);});
+      S.cifConts = OC_CONTS[oc.oc].map(function(c){return Object.assign({lineIdxs:[]},c);});
     } else {
       S.cifConts = [];
     }
@@ -2007,8 +2002,24 @@ function onCifOC(){
   renderPage();
 }
 
+function toggleCifContLine(contIdx, lineIdx, checked){
+  var c = S.cifConts[contIdx];
+  if(!c) return;
+  if(!c.lineIdxs) c.lineIdxs = [];
+  if(checked){
+    S.cifConts.forEach(function(other, oi){
+      if(oi !== contIdx && other.lineIdxs)
+        other.lineIdxs = other.lineIdxs.filter(function(li){ return li !== lineIdx; });
+    });
+    if(c.lineIdxs.indexOf(lineIdx) === -1) c.lineIdxs.push(lineIdx);
+  } else {
+    c.lineIdxs = c.lineIdxs.filter(function(li){ return li !== lineIdx; });
+  }
+  renderPage();
+}
+
 function addCifCont(){
-  S.cifConts.push({num:S.cifConts.length+1, ocean:0, contUsd:0, local:0, insurance:0, truck:0});
+  S.cifConts.push({num:S.cifConts.length+1, ocean:0, contUsd:0, local:0, insurance:0, truck:0, lineIdxs:[]});
   renderPage();
 }
 
