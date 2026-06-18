@@ -1248,7 +1248,7 @@ function confirmSplitLine(cotId, lineIdx){
     });
   });
   // Reemplazar línea original con las subdivididas
-  c.detalle.splice(lineIdx, 1, ...newLines);
+  var args = [lineIdx, 1].concat(newLines); Array.prototype.splice.apply(c.detalle, args);
   c.lineas = c.detalle.length;
   saveData();
   _closeModal();
