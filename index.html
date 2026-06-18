@@ -404,7 +404,7 @@ tr:last-child td{border-bottom:none;}
   // ── Cargar todos los datos al inicio ──
   window.fbLoadAll = async function(){
     try{
-      const keys = ['bls', 'cots', 'prods', 'cif_firmes'];
+      const keys = ['bls', 'cots', 'prods', 'cif_firmes', 'ddp'];
       for(var k of keys){
         const snap = await getDoc(doc(db, 'montana', k));
         if(snap.exists()){
@@ -413,6 +413,7 @@ tr:last-child td{border-bottom:none;}
           else if(k==='cots') S.cots = val;
           else if(k==='prods') S.prods = val;
           else if(k==='cif_firmes') S.cifFirmes = val;
+          else if(k==='ddp') S.ddp = val;
         }
       }
       renderSidebar();
@@ -659,6 +660,8 @@ let S={
   cifSel:null, cifConts:[], cifTRM:7.25, cifCOP:4100,
   cifFirmes:{},  // {ocId: {fecha, usuario, datos}}
   prodVista:'grid',
+  ddpVista:'bl',  // 'bl' o 'oc'
+  ddp:{},         // {blId: {costos, lineas, firme}}
   bls:[],  // Bill of Lading records
   blSearch:'', blEtapa:'',
   cots:null, prods:null,
@@ -678,6 +681,7 @@ function saveData(){
     window.fbSave('bls', S.bls);
     window.fbSave('prods', S.prods);
     window.fbSave('cots', S.cots);
+    window.fbSave('ddp', S.ddp);
   }
 }
 function loadData(){
@@ -685,6 +689,7 @@ function loadData(){
     const c=localStorage.getItem('mt_cots');
     const p=localStorage.getItem('mt_prods');
     const b=localStorage.getItem('mt_bls');
+  const dd=localStorage.getItem('mt_ddp'); if(dd) S.ddp=JSON.parse(dd);
     S.cots = c?JSON.parse(c):OCS_INIT.map(function(x){return Object.assign({},x);});
     S.prods = p?JSON.parse(p):PRODS_INIT.map(function(x){return Object.assign({},x);});
     S.bls = b?JSON.parse(b):[];
@@ -796,6 +801,7 @@ function renderSidebar(){
   if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='cots'?'active':''}" data-p="cots"><i class="ti ti-calculator"></i>Cotizaciones<span class="sb-badge">${S.cots.length}</span></div>`;
   if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='cif'?'active':''}" data-p="cif"><i class="ti ti-coin"></i>Calculadora CIF${isAdmin()?'<span class="sb-badge" style="background:rgba(201,162,39,.2);color:var(--d);">CIF</span>':'<i class="ti ti-eye" style="margin-left:auto;font-size:12px;opacity:.5;" title="Solo lectura"></i>'}</div>`;
   html+=`<div class="sb-item ${S.page==='bl'?'active':''}" data-p="bl"><i class="ti ti-ship"></i>BL Management<span class="sb-badge">${S.bls.length}</span></div>`;
+  if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='ddp'?'active':''}" data-p="ddp"><i class="ti ti-building-warehouse"></i>Importación DDP<span class="sb-badge" style="background:rgba(201,162,39,.2);color:var(--d);">DDP</span></div>`;
   html+=`<div class="sb-div"></div><span class="sb-section">Catálogo</span>`;
   if(!isAuxBL()) html+=`<div class="sb-item ${S.page==='prods'?'active':''}" data-p="prods"><i class="ti ti-package"></i>Productos<span class="sb-badge">${S.prods.length}</span></div>`;
   document.getElementById('sidebar').innerHTML=html;
@@ -815,6 +821,7 @@ function renderPage(){
     else if(S.page==='prods') ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageProds();
     else if(S.page==='cif') ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;color:var(--tl);"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageCIF();
     else if(S.page==='bl'){ma.innerHTML=pageBL();bindBL();}
+    else if(S.page==='ddp'){ma.innerHTML=isAuxBL()?'<div style="text-align:center;padding:60px;"><i class="ti ti-lock" style="font-size:40px;display:block;margin-bottom:10px;"></i><div>Acceso restringido</div></div>':pageDDP();}
     bindPage();
   } finally {
     window._r = false;
@@ -3171,6 +3178,8 @@ document.addEventListener('click', function(e){
   else if(action==='clear-prod-filter'){ S.pS='';S.pG='';renderPage(); }
   else if(action==='prod-grupo-btn'){ S.pG=el.dataset.g;renderPage(); }
   else if(action==='prod-vista'){ S.prodVista=el.dataset.v;renderPage(); }
+  else if(action==='ddp-vista'){ S.ddpVista=el.dataset.v;renderPage(); }
+  else if(action==='abrir-ddp'){ abrirDDP(id); }
   else if(action==='ver-prod'){
     var p=S.prods.find(function(x){return x.id===id;});
     if(p) openModal(modalProd(p));
@@ -3507,6 +3516,314 @@ function deletePDFFromBL(blId, pdfIdx){
   saveData();
   toast('Documento eliminado ✓');
   setTimeout(function(){ verBL(blId); }, 300);
+}
+
+
+// ─── MÓDULO DDP ───
+var DDP_RUBROS = ['Navy Certifletes','Navy Manejos','Navy Comodatos','Navy Emisión BL','Gastos Portuarios Bquilla','Asesoría SIA','Transporte Terrestre'];
+
+function getDDPProgress(blId){
+  var ddp = S.ddp[blId] || {};
+  var costos = ddp.costos || {};
+  var lineas = ddp.lineas || [];
+  var docs = ddp.docs || {};
+  var total = DDP_RUBROS.length * 2; // valor + doc por rubro
+  var done = 0;
+  DDP_RUBROS.forEach(function(r){
+    if(costos[r] && +costos[r] > 0) done++;
+    if(docs[r] && docs[r].url) done++;
+  });
+  // Líneas: arancel e IVA por línea
+  var oc = S.bls.find(function(b){return b.id===blId;});
+  if(oc){
+    var ocData = S.cots.find(function(c){return c.id===oc.ocId;});
+    if(ocData && ocData.detalle){
+      var nLineas = (oc.lines||[]).length;
+      total += nLineas * 2;
+      lineas.forEach(function(l){
+        if(l.arancel!==undefined && l.arancel!=='') done++;
+        if(l.iva!==undefined && l.iva!=='') done++;
+      });
+    }
+  }
+  return total > 0 ? Math.round(done/total*100) : 0;
+}
+
+function getOCDDPProgress(ocId){
+  var blsOC = S.bls.filter(function(b){return b.ocId===ocId;});
+  if(blsOC.length===0) return 0;
+  var sum = blsOC.reduce(function(s,b){return s+getDDPProgress(b.id);},0);
+  return Math.round(sum/blsOC.length);
+}
+
+function pageDDP(){
+  var vista = S.ddpVista || 'bl';
+  var h = '';
+
+  // ── Header ──
+  h += '<div class="page-header">';
+  h += '<div><div class="page-title" style="display:flex;align-items:center;gap:10px;"><i class="ti ti-building-warehouse" style="color:var(--d);font-size:22px;"></i>Importación DDP</div>';
+  h += '<div class="page-sub">Costos de nacionalización y derechos de importación</div></div>';
+  h += '<div class="page-actions" style="display:flex;gap:8px;">';
+  h += '<div style="display:flex;border:1px solid var(--bo);border-radius:8px;overflow:hidden;">';
+  h += '<button class="btn btn-sm" data-action="ddp-vista" data-v="bl" style="border-radius:0;border:none;background:'+(vista==='bl'?'var(--v)':'transparent')+';color:'+(vista==='bl'?'var(--d)':'var(--tl)')+';" title="Por BL"><i class="ti ti-file-invoice"></i>Por BL</button>';
+  h += '<button class="btn btn-sm" data-action="ddp-vista" data-v="oc" style="border-radius:0;border:none;border-left:1px solid var(--bo);background:'+(vista==='oc'?'var(--v)':'transparent')+';color:'+(vista==='oc'?'var(--d)':'var(--tl)')+';" title="Por OC"><i class="ti ti-list"></i>Por OC</button>';
+  h += '</div></div></div>';
+
+  if(S.bls.length===0){
+    h += '<div style="text-align:center;padding:50px;background:#fff;border-radius:12px;border:2px dashed var(--bd);color:var(--tl);">';
+    h += '<i class="ti ti-ship-off" style="font-size:40px;display:block;margin-bottom:10px;color:var(--bd);"></i>';
+    h += '<div style="font-size:14px;font-weight:500;">No hay BLs registrados</div>';
+    h += '<div style="font-size:12px;margin-top:4px;">Registra BLs primero en BL Management</div>';
+    h += '</div>';
+    return h;
+  }
+
+  if(vista==='oc'){
+    // ── Vista por OC ──
+    var ocsConBL = [];
+    S.cots.forEach(function(oc){
+      var bls = S.bls.filter(function(b){return b.ocId===oc.id;});
+      if(bls.length>0) ocsConBL.push({oc:oc, bls:bls});
+    });
+
+    ocsConBL.forEach(function(item){
+      var prog = getOCDDPProgress(item.oc.id);
+      var color = prog===100?'#2e7d32':prog>50?'#f57c00':'#c62828';
+      h += '<div class="card" style="margin-bottom:16px;">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--bo);">';
+      h += '<div style="display:flex;align-items:center;gap:10px;">';
+      h += '<div style="background:var(--v);color:var(--d);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">'+item.oc.oc+'</div>';
+      h += '<div style="font-size:13px;font-weight:600;color:var(--v);">'+item.bls.length+' BL(s)</div></div>';
+      h += '<div style="text-align:right;">';
+      h += '<div style="font-size:20px;font-weight:700;color:'+color+';">'+prog+'%</div>';
+      h += '<div style="font-size:10px;color:var(--tl);">completado</div></div></div>';
+      // Barra de progreso
+      h += '<div style="padding:0 16px 8px;">';
+      h += '<div style="background:#f0ede6;border-radius:20px;height:8px;overflow:hidden;margin:8px 0;">';
+      h += '<div style="background:'+color+';height:100%;width:'+prog+'%;border-radius:20px;transition:width .5s;"></div></div>';
+      // BLs de esta OC
+      item.bls.forEach(function(bl){
+        var bp = getDDPProgress(bl.id);
+        var bc = bp===100?'#2e7d32':bp>50?'#f57c00':'#c62828';
+        var firme = S.ddp[bl.id] && S.ddp[bl.id].firme;
+        h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:#f9f7f4;border-radius:8px;margin-bottom:6px;">';
+        h += '<div style="font-size:12px;font-weight:500;">'+bl.blNum+'</div>';
+        h += '<div style="display:flex;align-items:center;gap:8px;">';
+        if(firme) h += '<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;">En Firme</span>';
+        h += '<div style="font-size:12px;font-weight:700;color:'+bc+';">'+bp+'%</div>';
+        h += '<button class="btn btn-gold btn-sm" data-action="abrir-ddp" data-id="'+bl.id+'" style="font-size:11px;padding:4px 10px;">Gestionar</button>';
+        h += '</div></div>';
+      });
+      h += '</div></div>';
+    });
+
+  } else {
+    // ── Vista por BL ──
+    S.bls.forEach(function(bl){
+      var oc = S.cots.find(function(c){return c.id===bl.ocId;});
+      var prog = getDDPProgress(bl.id);
+      var color = prog===100?'#2e7d32':prog>50?'#f57c00':'#c62828';
+      var firme = S.ddp[bl.id] && S.ddp[bl.id].firme;
+
+      h += '<div class="card" style="margin-bottom:16px;">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--bo);">';
+      h += '<div>';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+      if(oc) h += '<span style="background:var(--v);color:var(--d);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">'+oc.oc+'</span>';
+      h += '<span style="font-size:13px;font-weight:600;color:var(--v);">'+bl.blNum+'</span>';
+      if(firme) h += '<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;"><i class="ti ti-lock"></i> En Firme</span>';
+      h += '</div>';
+      h += '<div style="font-size:11px;color:var(--tl);">'+(bl.naviera||'')+(bl.vessel?' · '+bl.vessel:'')+'</div>';
+      h += '</div>';
+      h += '<div style="text-align:right;">';
+      h += '<div style="font-size:24px;font-weight:700;color:'+color+';">'+prog+'%</div>';
+      h += '<div style="font-size:10px;color:var(--tl);">completado</div></div></div>';
+
+      // Barra de progreso
+      h += '<div style="padding:8px 16px;">';
+      h += '<div style="background:#f0ede6;border-radius:20px;height:10px;overflow:hidden;">';
+      h += '<div style="background:linear-gradient(90deg,'+color+','+color+'aa);height:100%;width:'+prog+'%;border-radius:20px;transition:width .5s;"></div></div>';
+
+      // Rubros resumen
+      var ddp = S.ddp[bl.id] || {};
+      var costos = ddp.costos || {};
+      var docs = ddp.docs || {};
+      h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">';
+      DDP_RUBROS.forEach(function(r){
+        var tieneVal = costos[r] && +costos[r]>0;
+        var tieneDoc = docs[r] && docs[r].url;
+        var status = tieneVal && tieneDoc ? '✓' : tieneVal ? '💰' : tieneDoc ? '📄' : '○';
+        var bg = tieneVal && tieneDoc ? '#e8f5e9' : tieneVal || tieneDoc ? '#fff8e1' : '#f5f5f5';
+        var tc = tieneVal && tieneDoc ? '#2e7d32' : tieneVal || tieneDoc ? '#f57c00' : '#9e9e9e';
+        h += '<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:'+bg+';color:'+tc+';border:1px solid '+tc+'33;">'+status+' '+r+'</span>';
+      });
+      h += '</div>';
+
+      h += '<div style="margin-top:10px;text-align:right;">';
+      if(!firme){
+        h += '<button class="btn btn-gold btn-sm" data-action="abrir-ddp" data-id="'+bl.id+'" style="font-size:11px;">Gestionar DDP</button>';
+      } else {
+        h += '<button class="btn btn-out btn-sm" data-action="abrir-ddp" data-id="'+bl.id+'" style="font-size:11px;">Ver Detalle</button>';
+      }
+      h += '</div></div></div>';
+    });
+  }
+
+  return h;
+}
+
+function saveDDPCosto(blId, rubroEnc, val){
+  var r = decodeURIComponent(rubroEnc);
+  if(!S.ddp[blId]) S.ddp[blId]={costos:{},docs:{},lineas:[],firme:false};
+  S.ddp[blId].costos[r] = val;
+  saveData();
+}
+function saveDDPLinea(blId, li, campo, val){
+  if(!S.ddp[blId]) S.ddp[blId]={costos:{},docs:{},lineas:[],firme:false};
+  while(S.ddp[blId].lineas.length<=li) S.ddp[blId].lineas.push({});
+  S.ddp[blId].lineas[li][campo] = val;
+  saveData();
+}
+
+function abrirDDP(blId){
+  var bl = S.bls.find(function(b){return b.id===blId;});
+  if(!bl) return;
+  var oc = S.cots.find(function(c){return c.id===bl.ocId;});
+  var ddp = S.ddp[blId] || {costos:{}, docs:{}, lineas:[], firme:false};
+  var firme = ddp.firme;
+  var costos = ddp.costos || {};
+  var docs = ddp.docs || {};
+  var lineas = ddp.lineas || [];
+  var blLines = bl.lines || [];
+  while(lineas.length < blLines.length) lineas.push({arancel:'', iva:''});
+
+  var h = '';
+  h += '<div style="max-height:80vh;overflow-y:auto;padding:20px;">';
+
+  // Header
+  h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<i class="ti ti-building-warehouse" style="font-size:24px;color:var(--d);"></i>';
+  h += '<div><div style="font-size:16px;font-weight:700;color:var(--v);">DDP &middot; '+bl.blNum+'</div>';
+  if(oc) h += '<div style="font-size:11px;color:var(--tl);">'+oc.oc+'</div>';
+  h += '</div>';
+  if(firme) h += '<span style="margin-left:auto;background:#e8f5e9;color:#2e7d32;font-size:11px;padding:4px 12px;border-radius:20px;font-weight:600;"><i class="ti ti-lock"></i> En Firme</span>';
+  h += '</div>';
+
+  // Costos DDP
+  h += '<div style="font-size:12px;font-weight:700;color:var(--v);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;"><i class="ti ti-receipt" style="margin-right:6px;"></i>Costos de Importaci&oacute;n</div>';
+  var totalDDP = 0;
+  DDP_RUBROS.forEach(function(r, i){
+    var val = costos[r] || '';
+    var doc = docs[r] || {};
+    if(val && +val > 0) totalDDP += +val;
+    var rubroEnc = encodeURIComponent(r);
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:#f9f7f4;border-radius:8px;margin-bottom:6px;">';
+    h += '<div style="width:180px;font-size:12px;font-weight:500;flex-shrink:0;">'+r+'</div>';
+    if(!firme){
+      h += '<input type="number" step="0.01" value="'+val+'" placeholder="0.00"'+
+           ' onchange="saveDDPCosto('+blId+',''+rubroEnc+'',+this.value)"'+
+           ' style="width:120px;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;">';
+    } else {
+      h += '<span style="width:120px;padding:6px 8px;font-size:12px;font-weight:600;">$'+(val?Number(val).toLocaleString('es-CO'):'0')+'</span>';
+    }
+    h += '<span style="font-size:11px;color:var(--tl);">COP</span>';
+    if(doc.url){
+      h += '<a href="'+doc.url+'" target="_blank" style="color:#1565c0;font-size:11px;white-space:nowrap;flex:1;"><i class="ti ti-file-check"></i> '+doc.nombre+'</a>';
+      if(!firme) h += '<button onclick="borrarDocDDP('+blId+',''+rubroEnc+'')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px;"><i class="ti ti-trash"></i></button>';
+    } else if(!firme){
+      h += '<button onclick="subirDocDDP('+blId+',''+rubroEnc+'')" style="background:var(--d);color:var(--v);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;flex:1;text-align:center;"><i class="ti ti-upload"></i> Soporte</button>';
+    } else {
+      h += '<span style="font-size:11px;color:#9e9e9e;flex:1;">Sin soporte</span>';
+    }
+    h += '</div>';
+  });
+
+  h += '<div style="display:flex;justify-content:space-between;padding:10px 16px;background:var(--v);border-radius:8px;margin-top:8px;margin-bottom:16px;">';
+  h += '<span style="color:var(--d);font-weight:700;font-size:13px;">Total Costos DDP</span>';
+  h += '<span style="color:var(--d);font-weight:700;font-size:15px;">$'+totalDDP.toLocaleString('es-CO')+' COP</span>';
+  h += '</div>';
+
+  // Arancel e IVA por línea
+  if(blLines.length > 0){
+    h += '<div style="font-size:12px;font-weight:700;color:var(--v);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;"><i class="ti ti-percentage" style="margin-right:6px;"></i>Arancel e IVA por Producto</div>';
+    blLines.forEach(function(bl_line, li){
+      var lin = lineas[li] || {arancel:'', iva:''};
+      h += '<div style="padding:10px;background:#f9f7f4;border-radius:8px;margin-bottom:6px;">';
+      h += '<div style="font-size:12px;font-weight:600;color:var(--v);margin-bottom:6px;">'+bl_line.producto+'</div>';
+      h += '<div style="display:flex;gap:10px;">';
+      h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">Arancel %</label>';
+      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.arancel||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
+           ' onchange="saveDDPLinea('+blId+','+li+','arancel',+this.value)"'+
+           ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
+      h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">IVA %</label>';
+      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.iva||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
+           ' onchange="saveDDPLinea('+blId+','+li+','iva',+this.value)"'+
+           ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
+      h += '</div></div>';
+    });
+  }
+
+  // Botón Dejar en Firme
+  if(!firme && isAdmin()){
+    var allDocsOk = DDP_RUBROS.every(function(r){ return docs[r] && docs[r].url; });
+    h += '<div style="margin-top:16px;padding:12px;background:'+(allDocsOk?'#e8f5e9':'#fff8e1')+';border-radius:8px;border:1px solid '+(allDocsOk?'#a5d6a7':'#ffe082')+'">';
+    if(allDocsOk){
+      h += '<div style="font-size:12px;color:#2e7d32;margin-bottom:8px;">Todos los soportes est&aacute;n cargados. Puedes dejar en firme.</div>';
+      h += '<button onclick="dejarEnFirmeDDP('+blId+')" class="btn btn-gold" style="width:100%;"><i class="ti ti-lock"></i>Dejar en Firme</button>';
+    } else {
+      var faltantes = DDP_RUBROS.filter(function(r){return !docs[r]||!docs[r].url;});
+      h += '<div style="font-size:12px;color:#f57c00;">Faltan soportes: '+faltantes.join(', ')+'</div>';
+    }
+    h += '</div>';
+  }
+
+  h += '</div>';
+  h += '<div class="modal-foot"><button class="btn btn-out btn-sm btn-modal-close">Cerrar</button></div>';
+  openModal(h);
+}
+
+function subirDocDDP(blId, rubroEnc){
+  var rubro = decodeURIComponent(rubroEnc);
+  var input = document.createElement('input');
+  input.type='file'; input.accept='.pdf,.jpg,.jpeg,.png';
+  input.onchange = async function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var bl = S.bls.find(function(b){return b.id===blId;});
+    if(!bl) return;
+    toast('Subiendo soporte...');
+    var result = await window.fbUploadPDF(file, bl.blNum+'/ddp');
+    if(!result){ toast('Error al subir','error'); return; }
+    if(!S.ddp[blId]) S.ddp[blId]={costos:{},docs:{},lineas:[],firme:false};
+    S.ddp[blId].docs[rubro] = {url:result.url, nombre:result.nombre, path:result.path, fecha:new Date().toLocaleDateString('es-CO')};
+    saveData();
+    toast('Soporte subido ✓');
+    setTimeout(function(){ abrirDDP(blId); }, 500);
+  };
+  input.click();
+}
+
+function borrarDocDDP(blId, rubroEnc){
+  var rubro = decodeURIComponent(rubroEnc);
+  if(!confirm('Eliminar el soporte de "'+rubro+'"?')) return;
+  var doc = S.ddp[blId] && S.ddp[blId].docs && S.ddp[blId].docs[rubro];
+  if(doc && doc.path && window.fbDeletePDF) window.fbDeletePDF(doc.path);
+  if(S.ddp[blId] && S.ddp[blId].docs) delete S.ddp[blId].docs[rubro];
+  saveData();
+  toast('Soporte eliminado ✓');
+  setTimeout(function(){ abrirDDP(blId); }, 300);
+}
+
+function dejarEnFirmeDDP(blId){
+  if(!confirm('¿Dejar en firme el DDP de este BL? No podrás modificarlo después.')) return;
+  if(!S.ddp[blId]) S.ddp[blId]={costos:{},docs:{},lineas:[],firme:false};
+  S.ddp[blId].firme = true;
+  S.ddp[blId].fechaFirme = new Date().toLocaleDateString('es-CO');
+  S.ddp[blId].firmadoPor = S.user.n;
+  saveData();
+  toast('DDP dejado en firme ✓');
+  setTimeout(function(){ renderPage(); closeModal(); }, 500);
 }
 
 // ─── INIT ───
