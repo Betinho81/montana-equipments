@@ -3722,7 +3722,7 @@ function abrirDDP(blId){
     h += '<div style="width:180px;font-size:12px;font-weight:500;flex-shrink:0;">'+r+'</div>';
     if(!firme){
       h += '<input type="number" step="0.01" value="'+val+'" placeholder="0.00"'+
-           ' onchange="saveDDPCosto('+blId+',''+rubroEnc+'',+this.value)"'+
+           ' onchange="saveDDPCosto('+blId+',\''+rubroEnc+'\',+this.value)"'+
            ' style="width:120px;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;">';
     } else {
       h += '<span style="width:120px;padding:6px 8px;font-size:12px;font-weight:600;">$'+(val?Number(val).toLocaleString('es-CO'):'0')+'</span>';
@@ -3730,9 +3730,9 @@ function abrirDDP(blId){
     h += '<span style="font-size:11px;color:var(--tl);">COP</span>';
     if(doc.url){
       h += '<a href="'+doc.url+'" target="_blank" style="color:#1565c0;font-size:11px;white-space:nowrap;flex:1;"><i class="ti ti-file-check"></i> '+doc.nombre+'</a>';
-      if(!firme) h += '<button onclick="borrarDocDDP('+blId+',''+rubroEnc+'')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px;"><i class="ti ti-trash"></i></button>';
+      if(!firme) h += '<button onclick="borrarDocDDP('+blId+',\''+rubroEnc+'\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:16px;"><i class="ti ti-trash"></i></button>';
     } else if(!firme){
-      h += '<button onclick="subirDocDDP('+blId+',''+rubroEnc+'')" style="background:var(--d);color:var(--v);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;flex:1;text-align:center;"><i class="ti ti-upload"></i> Soporte</button>';
+      h += '<button onclick="subirDocDDP('+blId+',\''+rubroEnc+'\')" style="background:var(--d);color:var(--v);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;flex:1;text-align:center;"><i class="ti ti-upload"></i> Soporte</button>';
     } else {
       h += '<span style="font-size:11px;color:#9e9e9e;flex:1;">Sin soporte</span>';
     }
