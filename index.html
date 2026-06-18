@@ -3754,11 +3754,11 @@ function abrirDDP(blId){
       h += '<div style="display:flex;gap:10px;">';
       h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">Arancel %</label>';
       h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.arancel||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
-           ' onchange="saveDDPLinea('+blId+','+li+','arancel',+this.value)"'+
+           ' onchange="saveDDPLinea('+blId+','+li+',&quot;arancel&quot;,+this.value)"'+
            ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
       h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">IVA %</label>';
       h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.iva||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
-           ' onchange="saveDDPLinea('+blId+','+li+','iva',+this.value)"'+
+           ' onchange="saveDDPLinea('+blId+','+li+',&quot;iva&quot;,+this.value)"'+
            ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
       h += '</div></div>';
     });
