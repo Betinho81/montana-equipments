@@ -3697,6 +3697,8 @@ function getDDPProgress(blId){
       lineas.forEach(function(l){
         if(l.arancel!==undefined && l.arancel!=='') done++;
         if(l.iva!==undefined && l.iva!=='') done++;
+        total++; // manifiesto doc
+        if(ddp.docs&&ddp.docs['manifiesto_'+i]&&ddp.docs['manifiesto_'+i].url) done++;
       });
     }
   }
@@ -3846,6 +3848,7 @@ function abrirDDP(blId){
   var oc = S.cots.find(function(c){return c.id===bl.ocId;});
   var ddp = S.ddp[blId] || {costos:{}, docs:{}, lineas:[], firme:false};
   var firme = ddp.firme;
+  var canEditDDP=isAdmin()||S.user.r==='importador_ddp';
   var costos = ddp.costos || {};
   var docs = ddp.docs || {};
   var lineas = ddp.lineas || [];
@@ -3907,19 +3910,30 @@ function abrirDDP(blId){
       h += '<div style="font-size:12px;font-weight:600;color:var(--v);margin-bottom:6px;">'+bl_line.producto+'</div>';
       h += '<div style="display:flex;gap:10px;">';
       h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">Arancel %</label>';
-      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.arancel||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
+      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.arancel||'')+'" placeholder="0.00" '+((firme||!canEditDDP)?'disabled':'')+
            ' onchange="saveDDPLinea('+blId+','+li+',&quot;arancel&quot;,+this.value)"'+
            ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
       h += '<div style="flex:1;"><label style="font-size:10px;color:var(--tl);display:block;margin-bottom:3px;">IVA %</label>';
-      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.iva||'')+'" placeholder="0.00" '+(firme?'disabled':'')+
+      h += '<input type="number" step="0.01" min="0" max="100" value="'+(lin.iva||'')+'" placeholder="0.00" '+((firme||!canEditDDP)?'disabled':'')+
            ' onchange="saveDDPLinea('+blId+','+li+',&quot;iva&quot;,+this.value)"'+
            ' style="width:100%;padding:6px 8px;border:1px solid var(--bo);border-radius:6px;font-size:12px;"></div>';
-      h += '</div></div>';
+      h += '</div>';
+      // PDF manifiesto por línea
+      var linDoc = (ddp.docs&&ddp.docs['manifiesto_'+li]) || {};
+      if(linDoc.url){
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding:6px 8px;background:#e3f2fd;border-radius:6px;">';
+        h += '<i class="ti ti-file-type-pdf" style="color:#1565c0;flex-shrink:0;"></i>';
+        h += '<a href="'+linDoc.url+'" target="_blank" style="font-size:11px;color:#1565c0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+linDoc.nombre+'</a>';
+        if(!firme&&canEditDDP) h += '<button onclick="borrarDocDDP('+blId+',\'manifiesto_'+li+'\')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:14px;"><i class="ti ti-trash"></i></button>';
+        h += '</div>';
+      } else if(!firme&&canEditDDP){
+        h += '<button onclick="subirDocDDP('+blId+',\'manifiesto_'+li+'\')" style="margin-top:6px;background:#e3f2fd;color:#1565c0;border:1px solid #1565c0;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;width:100%;"><i class="ti ti-upload"></i> Subir Manifiesto PDF</button>';
+      }
+      h += '</div>';
     });
   }
 
   // Botón Dejar en Firme
-  var canEditDDP=isAdmin()||S.user.r==='importador_ddp';
   if(!firme && canEditDDP){
     var allDocsOk = DDP_RUBROS.every(function(r){ return docs[r] && docs[r].url; });
     h += '<div style="margin-top:16px;padding:12px;background:'+(allDocsOk?'#e8f5e9':'#fff8e1')+';border-radius:8px;border:1px solid '+(allDocsOk?'#a5d6a7':'#ffe082')+'">';
