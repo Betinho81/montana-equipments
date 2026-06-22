@@ -405,6 +405,7 @@ tr:last-child td{border-bottom:none;}
   window.fbLoadAll = async function(){
     try{
       const keys = ['bls', 'cots', 'prods', 'cif_firmes', 'ddp'];
+      const savedPage = S.page; // preserve current page (e.g. 'ddp' for importador_ddp)
       for(var k of keys){
         const snap = await getDoc(doc(db, 'montana', k));
         if(snap.exists()){
@@ -416,6 +417,7 @@ tr:last-child td{border-bottom:none;}
           else if(k==='ddp') S.ddp = val;
         }
       }
+      S.page = savedPage; // restore page after Firebase load
       renderSidebar();
       renderPage();
     }catch(e){ console.error('fbLoadAll error:', e); }
