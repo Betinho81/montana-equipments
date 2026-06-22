@@ -417,7 +417,8 @@ tr:last-child td{border-bottom:none;}
           else if(k==='ddp') S.ddp = val;
         }
       }
-      S.page = savedPage; // restore page after Firebase load
+      // Restore page: always respect if set by user click or by role (importador_ddp)
+      if(S._pageSetByUser || savedPage !== S.page) S.page = savedPage;
       renderSidebar();
       renderPage();
     }catch(e){ console.error('fbLoadAll error:', e); }
@@ -775,6 +776,7 @@ function doLogin(){
   document.getElementById('tb-role').textContent=u.r.toUpperCase();
   loadData();
   loadCIFFirmes();
+  S._pageSetByUser=false;
   if(u.r==='importador_ddp') S.page='ddp';
   renderSidebar();
   renderPage();
@@ -810,7 +812,7 @@ function renderSidebar(){
   if(!isAuxBL()&&S.user.r!=='importador_ddp') html+=`<div class="sb-item ${S.page==='prods'?'active':''}" data-p="prods"><i class="ti ti-package"></i>Productos<span class="sb-badge">${S.prods.length}</span></div>`;
   document.getElementById('sidebar').innerHTML=html;
   document.querySelectorAll('.sb-item[data-p]').forEach(el=>{
-    el.onclick=()=>{S.page=el.dataset.p;renderSidebar();renderPage();};
+    el.onclick=()=>{S.page=el.dataset.p;S._pageSetByUser=true;renderSidebar();renderPage();};
   });
 }
 
