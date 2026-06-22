@@ -417,8 +417,9 @@ tr:last-child td{border-bottom:none;}
           else if(k==='ddp') S.ddp = val;
         }
       }
-      // Restore page: always respect if set by user click or by role (importador_ddp)
-      if(S._pageSetByUser || savedPage !== S.page) S.page = savedPage;
+      // Restore page: always respect user navigation or role-based page
+      S.page = savedPage;
+      window._r = false; // reset render lock before re-render
       renderSidebar();
       renderPage();
     }catch(e){ console.error('fbLoadAll error:', e); }
