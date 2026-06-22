@@ -3704,11 +3704,11 @@ function getDDPProgress(blId){
     if(ocData && ocData.detalle){
       var nLineas = (oc.lines||[]).length;
       total += nLineas * 2;
-      lineas.forEach(function(l){
+      lineas.forEach(function(l, li){
         if(l.arancel!==undefined && l.arancel!=='') done++;
         if(l.iva!==undefined && l.iva!=='') done++;
         total++; // manifiesto doc
-        if(ddp.docs&&ddp.docs['manifiesto_'+i]&&ddp.docs['manifiesto_'+i].url) done++;
+        if(ddp.docs&&ddp.docs['manifiesto_'+li]&&ddp.docs['manifiesto_'+li].url) done++;
       });
     }
   }
