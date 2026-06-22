@@ -1696,6 +1696,10 @@ function pageCIF(){
   html += '</div></div>';
   html += '<div style="padding:14px 16px;">';
 
+  // Calcular mergedOC para usar en checkboxes de líneas
+  var mergedOCPaso2 = buildMergedOC(sels);
+  var allLinesForPaso2 = mergedOCPaso2 ? (mergedOCPaso2.detalle||[]).filter(function(l){return (l.p||l.producto)&&((l.qty||0)>0||(l.fob||0)>0||(l.rmb||0)>0);}) : [];
+
   if(S.cifConts.length===0){
     html += '<div style="text-align:center;padding:24px;background:var(--cr);border-radius:9px;border:2px dashed var(--bd);color:var(--tl);font-size:13px;">';
     html += '<i class="ti ti-container" style="font-size:30px;display:block;margin-bottom:7px;color:var(--bd);"></i>';
@@ -1724,7 +1728,7 @@ function pageCIF(){
       html += '<td>'+inp('truck',c.truck||0)+'</td>';
       html += '<td style="text-align:right;font-weight:600;color:var(--v);">'+fR(tf)+'</td>';
       // ── Columna Líneas ──
-      var selDet2 = sel && (sel.detalle||[]).filter(function(l){return (l.p||l.producto)&&((l.qty||0)>0||(l.fob||0)>0||(l.rmb||0)>0);});
+      var selDet2 = allLinesForPaso2;
       if(selDet2 && selDet2.length > 0){
         html += '<td style="min-width:170px;max-width:220px;vertical-align:top;padding:6px 8px;">';
         if(canEdit){
@@ -1735,7 +1739,8 @@ function pageCIF(){
             S.cifConts.forEach(function(other,oi){if(oi!==i&&other.lineIdxs&&other.lineIdxs.indexOf(li)!==-1)blkEn=oi;});
             var blk=blkEn!==-1;
             var blkLbl=blk?(S.cifConts[blkEn].numFisico||('Cont.'+(S.cifConts[blkEn].num||blkEn+1))):'';
-            var lbl2=(l2.sku||l2.s||('L'+li))+' '+(l2.p||l2.producto||'').substring(0,14);
+            var ocTag = l2._fromOC ? ' ['+l2._fromOC.split('/')[0]+']' : '';
+            var lbl2=(l2.sku||l2.s||('L'+li))+' '+(l2.p||l2.producto||'').substring(0,12)+ocTag;
             var titleTxt=blk?('Asignada a '+blkLbl):(l2.p||l2.producto||'');
             html += '<label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:'+(blk?'not-allowed':'pointer')+';opacity:'+(blk?'0.5':'1')+';white-space:nowrap;color:'+(blk?'#999':'var(--v)')+';" title="'+titleTxt+'">';
             html += '<input type="checkbox"'+(chk2?' checked':'')+(blk?' disabled':'')+' style="accent-color:var(--d);width:12px;height:12px;flex-shrink:0;"';
